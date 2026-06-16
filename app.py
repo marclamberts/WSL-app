@@ -693,7 +693,7 @@ with tab3:
             x=misses_sf["x"], y=misses_sf["y"],
             mode="markers",
             marker=dict(
-                size=misses_sf["xG"]*60+5,
+                size=(misses_sf["xG"].fillna(0)*60+5).tolist(),
                 color="rgba(100,149,237,0.45)",
                 line=dict(color="rgba(70,100,180,0.6)", width=1),
             ),
@@ -711,7 +711,7 @@ with tab3:
             x=goals_sf["x"], y=goals_sf["y"],
             mode="markers",
             marker=dict(
-                size=goals_sf["xG"]*60+8,
+                size=(goals_sf["xG"].fillna(0)*60+8).tolist(),
                 color=RED,
                 symbol="star",
                 line=dict(color="darkred", width=1),
@@ -932,14 +932,14 @@ with tab6:
             goal_t = t_sh[t_sh["isGoal"]]
             fig_t.add_trace(go.Scatter(
                 x=miss_t["x"], y=miss_t["y"], mode="markers",
-                marker=dict(size=miss_t["xG"]*50+5, color="rgba(100,149,237,0.45)",
+                marker=dict(size=(miss_t["xG"].fillna(0)*50+5).tolist(), color="rgba(100,149,237,0.45)",
                             line=dict(color="rgba(70,100,180,0.5)",width=1)),
                 name="Shot", hovertemplate="%{customdata}<br>xG: %{marker.size:.2f}<extra></extra>",
                 customdata=miss_t["PlayerId"].fillna(""),
             ))
             fig_t.add_trace(go.Scatter(
                 x=goal_t["x"], y=goal_t["y"], mode="markers",
-                marker=dict(size=goal_t["xG"]*50+8, color=RED, symbol="star",
+                marker=dict(size=(goal_t["xG"].fillna(0)*50+8).tolist(), color=RED, symbol="star",
                             line=dict(color="darkred",width=1)),
                 name="Goal",
             ))
