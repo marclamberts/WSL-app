@@ -541,20 +541,29 @@ with tab1:
         if show_xg and not team_stats.empty:
             st.markdown('<span class="pill">xG vs xGA — Attack vs Defence</span>', unsafe_allow_html=True)
             scatter_df = team_stats.merge(standings[["Team","Pts"]], on="Team", how="left")
+            scatter_df = scatter_df.dropna(subset=["xG/90","xGA/90"])
+            pts_vals  = scatter_df["Pts"].fillna(0).to_numpy(dtype=float)
+            pts_max   = float(pts_vals.max()) if pts_vals.max() > 0 else 1.0
+            dot_sizes = (pts_vals / pts_max * 30 + 10).tolist()
+            dot_colors = pts_vals.tolist()
+            xg90_mean  = float(scatter_df["xG/90"].mean())
+            xga90_mean = float(scatter_df["xGA/90"].mean())
+            xg90_max   = float(scatter_df["xG/90"].max()) * 1.1
+            xga90_max  = float(scatter_df["xGA/90"].max()) * 1.1
             fig = go.Figure()
-            fig.add_shape(type="line", x0=scatter_df["xG/90"].mean(), x1=scatter_df["xG/90"].mean(),
-                          y0=0, y1=scatter_df["xGA/90"].max()*1.1, line=dict(color="#ccc",dash="dash",width=1))
-            fig.add_shape(type="line", x0=0, x1=scatter_df["xG/90"].max()*1.1,
-                          y0=scatter_df["xGA/90"].mean(), y1=scatter_df["xGA/90"].mean(),
+            fig.add_shape(type="line", x0=xg90_mean, x1=xg90_mean,
+                          y0=0, y1=xga90_max, line=dict(color="#ccc",dash="dash",width=1))
+            fig.add_shape(type="line", x0=0, x1=xg90_max,
+                          y0=xga90_mean, y1=xga90_mean,
                           line=dict(color="#ccc",dash="dash",width=1))
             fig.add_trace(go.Scatter(
-                x=scatter_df["xG/90"], y=scatter_df["xGA/90"],
+                x=scatter_df["xG/90"].tolist(), y=scatter_df["xGA/90"].tolist(),
                 mode="markers+text",
-                text=scatter_df["Team"].str.split().str[-1],
+                text=scatter_df["Team"].str.split().str[-1].tolist(),
                 textposition="top center", textfont=dict(size=10, color=NAVY),
                 marker=dict(
-                    size=(scatter_df["Pts"].fillna(0) / max(scatter_df["Pts"].max(), 1) * 30 + 10).tolist(),
-                    color=scatter_df["Pts"].fillna(0).tolist(), colorscale="Blues", showscale=True,
+                    size=dot_sizes,
+                    color=dot_colors, colorscale="Blues", showscale=True,
                     colorbar=dict(title="Pts", thickness=12),
                     line=dict(color=NAVY,width=1),
                 ),
