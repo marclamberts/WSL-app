@@ -86,6 +86,7 @@ def load_shots():
     shots["Date"] = pd.to_datetime(shots["Date"], utc=True, errors="coerce")
     shots["xG"]   = pd.to_numeric(shots["xG"], errors="coerce")
     shots["isGoal"] = shots["isGoal"].astype(str).str.upper().isin(["TRUE", "1", "YES"])
+    shots = shots.dropna(subset=["Date"])
     return shots
 
 @st.cache_data
@@ -166,7 +167,9 @@ def build_match_results(matches_df):
     }
     present = {k: v for k, v in cols_needed.items() if k in matches_df.columns}
     res = matches_df[list(present.keys())].rename(columns=present).copy()
-    res["Date"] = pd.to_datetime(res["Date"], utc=True, errors="coerce").dt.date
+    res["Date"] = pd.to_datetime(res["Date"], utc=True, errors="coerce")
+    res = res.dropna(subset=["Date"])
+    res["Date"] = res["Date"].dt.date
     res["HG"]   = pd.to_numeric(res.get("HG", np.nan), errors="coerce")
     res["AG"]   = pd.to_numeric(res.get("AG", np.nan), errors="coerce")
     res = res.dropna(subset=["HG", "AG"])
@@ -533,15 +536,21 @@ with tab5:
         render_table(breakdown, heatmap_cols=["xG", "Shots", "Conv%"], palette_map={"xG":"green","Shots":"blue","Conv%":"green"})
 
         st.markdown('<span class="section-label">Match-by-match xG</span>', unsafe_allow_html=True)
-        match_xg = t_shots.groupby(["HomeTeam", "AwayTeam", t_shots["Date"].dt.date]).agg(
+        t_shots = t_shots.copy()
+        o_shots = o_shots.copy()
+        t_shots["_date"] = t_shots["Date"].dt.date
+        o_shots["_date"] = o_shots["Date"].dt.date
+        match_xg = t_shots.groupby(["HomeTeam", "AwayTeam", "_date"]).agg(
             xG_for=("xG","sum"), Shots=("xG","count"), Goals=("isGoal","sum")
         ).reset_index()
         match_xg.columns = ["Home", "Away", "Date", "xG For", "Shots", "Goals"]
-        opp_xg = o_shots.groupby(["HomeTeam", "AwayTeam", o_shots["Date"].dt.date]).agg(
+        opp_xg = o_shots.groupby(["HomeTeam", "AwayTeam", "_date"]).agg(
             xGA=("xG","sum"), Shots_Ag=("xG","count"), GA=("isGoal","sum")
         ).reset_index()
         opp_xg.columns = ["Home", "Away", "Date", "xGA", "Shots Ag", "GA"]
-        mbm = match_xg.merge(opp_xg, on=["Home", "Away", "Date"], how="outer").sort_values("Date", ascending=False)
+        mbm = match_xg.merge(opp_xg, on=["Home", "Away", "Date"], how="outer")
+        mbm["Date"] = pd.to_datetime(mbm["Date"], errors="coerce")
+        mbm = mbm.dropna(subset=["Date"]).sort_values("Date", ascending=False)
         mbm["xG For"] = mbm["xG For"].round(2)
         mbm["xGA"]    = mbm["xGA"].round(2)
         mbm["xGD"]    = (mbm["xG For"] - mbm["xGA"]).round(2)
