@@ -165,7 +165,7 @@ def build_match_results(matches_df):
     }
     keep = {k: v for k, v in col_map.items() if k in matches_df.columns}
     res = matches_df[list(keep)].rename(columns=keep).copy()
-    res["Date"] = pd.to_datetime(res["Date"], utc=True, errors="coerce")
+    res["Date"] = pd.to_datetime(res["Date"].astype(str).str.rstrip("Z"), errors="coerce")
     res = res.dropna(subset=["Date"])
     res["Date"] = res["Date"].dt.date
     res["HG"]   = pd.to_numeric(res["HG"], errors="coerce")
@@ -227,8 +227,11 @@ def build_team_stats(shots_df, standings_df):
     for team in ALL_TEAMS:
         t_sh = shots_df[shots_df["TeamId"] == team]
         o_sh = shots_df[((shots_df["HomeTeam"]==team)|(shots_df["AwayTeam"]==team)) & (shots_df["TeamId"]!=team)]
-        gp_row = standings_df[standings_df["Team"]==team]["GP"].values
-        gp = int(gp_row[0]) if len(gp_row) else 1
+        gp_row = standings_df[standings_df["Team"]==team]["GP"].values if "Team" in standings_df.columns else []
+        gp = int(gp_row[0]) if len(gp_row) else max(
+            shots_df[(shots_df["HomeTeam"]==team)|(shots_df["AwayTeam"]==team)]
+            .groupby(["HomeTeam","AwayTeam",shots_df["Date"].dt.date]).ngroups, 1
+        )
 
         xg  = t_sh["xG"].sum()
         xga = o_sh["xG"].sum()
@@ -297,8 +300,8 @@ def build_xg_timeline(shots_df, mr):
     for _, row in mr.iterrows():
         gw_map[(row["Home"], row["Away"], row["Date"])] = row.get("GW", None)
     def get_gw(r):
-        return gw_map.get((r["HomeTeam"], r["AwayTeam"], r["_date"]),
-               gw_map.get((r["AwayTeam"], r["HomeTeam"], r["_date"]), None))
+        return gw_map.get((r["HomeTeam"], r["AwayTeam"], r.get("_date")),
+               gw_map.get((r["AwayTeam"], r["HomeTeam"], r.get("_date")), None))
     shots_df["GW"] = shots_df.apply(get_gw, axis=1)
     shots_df = shots_df.dropna(subset=["GW"])
     shots_df["GW"] = shots_df["GW"].astype(int)
@@ -327,7 +330,8 @@ def heat(val, vmin, vmax, pal="blue", inv=False):
     txt = "white" if r>.65 else NAVY
     return f"background:rgb{rgb};color:{txt};"
 
-def rank_badge(rank, n=len(standings)):
+def rank_badge(rank, n=None):
+    if n is None: n = len(standings) if not standings.empty else 20
     c = "#2196f3" if rank<=4 else "#ff9800" if rank<=6 else RED if rank>=n-1 else "#555"
     return f'<span style="background:{c};color:#fff;border-radius:3px;padding:1px 8px;font-size:.76rem;font-weight:700;">{rank}</span>'
 
