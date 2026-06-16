@@ -198,7 +198,7 @@ def build_standings(mr, shots_df):
             home[["Date","Result"]].assign(for_team=lambda d: d["Result"].map({"H":"W","D":"D","A":"L"})),
             away[["Date","Result"]].assign(for_team=lambda d: d["Result"].map({"A":"W","D":"D","H":"L"})),
         ]).sort_values("Date").tail(5)
-        form = all_games["for_team"].tolist()
+        form = " ".join(all_games["for_team"].tolist())  # store as string; split back when rendering
 
         # xG
         t_sh = shots_df[shots_df["TeamId"] == team] if not shots_df.empty else pd.DataFrame()
@@ -335,11 +335,12 @@ def rank_badge(rank, n=None):
     c = "#2196f3" if rank<=4 else "#ff9800" if rank<=6 else RED if rank>=n-1 else "#555"
     return f'<span style="background:{c};color:#fff;border-radius:3px;padding:1px 8px;font-size:.76rem;font-weight:700;">{rank}</span>'
 
-def form_html(form_list):
+def form_html(form_val):
     colors = {"W":"#4caf50","D":"#888","L":RED}
+    items = form_val.split() if isinstance(form_val, str) else form_val
     return "".join(
         f'<span class="form-dot" style="background:{colors.get(r,"#ccc")}">{r}</span>'
-        for r in form_list
+        for r in items
     )
 
 def fmt(val, col):
@@ -368,7 +369,7 @@ def render_table(df, heatmap_cols=None, invert_cols=None, pal_map=None, form_col
             elif col == "Team":
                 cell = f"<strong>{val}</strong>"
             elif col == "Form":
-                cell = form_html(val) if isinstance(val, list) else "—"
+                cell = form_html(val) if val else "—"
             elif col == "Score":
                 cell = f'<span style="font-weight:700">{val}</span>'
             elif col == "Result":
@@ -552,8 +553,8 @@ with tab1:
                 text=scatter_df["Team"].str.split().str[-1],
                 textposition="top center", textfont=dict(size=10, color=NAVY),
                 marker=dict(
-                    size=scatter_df["Pts"].fillna(10) / scatter_df["Pts"].max() * 30 + 10,
-                    color=scatter_df["Pts"], colorscale="Blues", showscale=True,
+                    size=(scatter_df["Pts"].fillna(0) / max(scatter_df["Pts"].max(), 1) * 30 + 10).tolist(),
+                    color=scatter_df["Pts"].fillna(0).tolist(), colorscale="Blues", showscale=True,
                     colorbar=dict(title="Pts", thickness=12),
                     line=dict(color=NAVY,width=1),
                 ),
