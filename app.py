@@ -896,132 +896,228 @@ def _pct_rank(series, val):
     return float(np.sum(arr <= val) / len(arr) * 100)
 
 
-def player_scouting_report(player_name, full_df):
+def _compute_pct_rows(player_name, full_df):
     prow = full_df[full_df["Player"] == player_name]
     if prow.empty:
-        return
+        return []
     prow = prow.iloc[0]
     pos   = prow.get("Pos", "FWD")
-    mins  = prow.get("Mins", 0)
-    team  = prow.get("Team", "")
-
     stat_defs = _SCOUT_GK if pos == "GK" else _SCOUT_OUTFIELD
     peers = full_df[(full_df["Pos"] == pos) & (full_df["Mins"] >= 450)].copy()
-
     rows = []
     for col, label, group, inv in stat_defs:
         if col not in full_df.columns:
             continue
-        val = prow.get(col, np.nan)
-        if pd.isna(val):
-            val = 0.0
-        val = float(val)
+        val = float(prow.get(col, 0) or 0)
         pct = _pct_rank(peers[col], val)
         if inv:
             pct = 100 - pct
-        rows.append({"stat": label, "val": val, "pct": pct, "group": group})
+        rows.append({"stat": label, "col": col, "val": val, "pct": pct, "group": group})
+    return rows
 
-    if not rows:
-        return
 
+def find_similar_players(player_name, full_df, n=5):
+    KEY = ["G/90","xG/90","Sh/90","Pass%","KP/90","xT/90","Tkl/90","Int/90","Drib%","Aer%","Tkl%"]
+    stat_cols = [c for c in KEY if c in full_df.columns]
+    prow = full_df[full_df["Player"] == player_name]
+    if prow.empty or not stat_cols:
+        return pd.DataFrame()
+    pos   = prow.iloc[0]["Pos"]
+    peers = full_df[
+        (full_df["Pos"] == pos) &
+        (full_df["Mins"] >= 450) &
+        (full_df["Player"] != player_name)
+    ].copy().reset_index(drop=True)
+    if peers.empty:
+        return pd.DataFrame()
+    X   = peers[stat_cols].fillna(0).values.astype(float)
+    x0  = prow[stat_cols].fillna(0).values[0].astype(float)
+    Xall = np.vstack([X, x0])
+    lo, hi = Xall.min(0), Xall.max(0)
+    rng = np.where(hi - lo > 0, hi - lo, 1.0)
+    X_n  = (X   - lo) / rng
+    x0_n = (x0  - lo) / rng
+    dists = np.sqrt(((X_n - x0_n) ** 2).sum(axis=1))
+    peers["_sim"] = 1 - (dists / (dists.max() + 1e-9))
+    top = peers.nsmallest(n, "_sim") if dists.max() > 0 else peers.head(n)
+    top = peers.copy()
+    top["_dist"] = dists
+    top = top.nsmallest(n, "_dist")
+    show_cols = ["Player","Team","Pos","GP","Mins"] + stat_cols[:6]
+    return top[[c for c in show_cols if c in top.columns]].reset_index(drop=True)
+
+
+def render_player_profile(player_name, full_df):
     import plotly.graph_objects as go
 
+    prow = full_df[full_df["Player"] == player_name]
+    if prow.empty:
+        st.warning(f"No data found for **{player_name}**.")
+        return
+    p    = prow.iloc[0]
+    pos  = p.get("Pos", "—")
+    team = p.get("Team", "—")
+    gp   = int(p.get("GP", 0))
+    st_  = int(p.get("Starts", 0))
+    mins = int(p.get("Mins", 0))
+
+    pos_colors = {"GK": "#7b1fa2", "DEF": "#1565c0", "MID": "#2e7d32", "FWD": RED}
+    pos_col    = pos_colors.get(pos, NAVY)
+
+    # ── Bio header ──────────────────────────────────────────────────────────
     st.markdown(f"""
-    <div style="background:#fff;border:1px solid #e4e4e0;border-top:3px solid {RED};
-         border-radius:6px;padding:1.25rem 1.5rem .75rem;margin:1rem 0 .5rem;">
-      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;">
-        Scouting Report · {pos} · {team}</div>
-      <div style="font-size:1.3rem;font-weight:800;color:{NAVY};margin:.1rem 0 .05rem;">{player_name}</div>
-      <div style="font-size:.75rem;color:#888;">{int(mins)} minutes · percentile vs position peers (≥450 min)</div>
+    <div style="background:{NAVY};border-radius:8px;padding:1.5rem 2rem;margin-bottom:1.25rem;
+         display:flex;align-items:center;gap:1.5rem;">
+      <div style="background:{pos_col};color:#fff;font-size:.7rem;font-weight:800;
+           letter-spacing:1.5px;text-transform:uppercase;padding:.4rem .9rem;
+           border-radius:4px;flex-shrink:0;">{pos}</div>
+      <div>
+        <div style="font-size:1.9rem;font-weight:900;color:#fff;letter-spacing:-.5px;line-height:1.1;">{player_name}</div>
+        <div style="font-size:.85rem;color:#7a9db8;margin-top:.25rem;">{team}</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:2rem;text-align:center;">
+        <div><div style="font-size:1.4rem;font-weight:800;color:#fff;">{gp}</div>
+             <div style="font-size:.62rem;color:#7a9db8;text-transform:uppercase;letter-spacing:1px;">GP</div></div>
+        <div><div style="font-size:1.4rem;font-weight:800;color:#fff;">{st_}</div>
+             <div style="font-size:.62rem;color:#7a9db8;text-transform:uppercase;letter-spacing:1px;">Starts</div></div>
+        <div><div style="font-size:1.4rem;font-weight:800;color:#fff;">{mins}</div>
+             <div style="font-size:.62rem;color:#7a9db8;text-transform:uppercase;letter-spacing:1px;">Minutes</div></div>
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
-    col_bar, col_pizza = st.columns([1, 1])
+    rows = _compute_pct_rows(player_name, full_df)
+    if not rows:
+        st.info("Not enough data to generate scouting report.")
+        return
 
-    # ── Left: percentile bar table ────────────────────────────────────────────
-    with col_bar:
-        bar_rows = []
+    sorted_rows = sorted(rows, key=lambda r: r["pct"], reverse=True)
+    strengths   = [r for r in sorted_rows if r["pct"] >= 70][:4]
+    weaknesses  = [r for r in sorted_rows if r["pct"] <= 35][-4:]
+
+    # ── Strengths / Weaknesses ───────────────────────────────────────────────
+    c_str, c_weak = st.columns(2)
+    def asset_card(title, items, color, icon):
+        lines = "".join(
+            f'''<div style="display:flex;align-items:center;justify-content:space-between;
+                 padding:.5rem 0;border-bottom:1px solid #f0f0ec;">
+              <span style="font-size:.82rem;font-weight:600;color:{NAVY};">{r["stat"]}</span>
+              <div style="display:flex;align-items:center;gap:.6rem;">
+                <span style="font-size:.78rem;color:#888;">{r["val"]:.2f}</span>
+                <span style="background:{color};color:#fff;font-size:.68rem;font-weight:700;
+                     padding:2px 7px;border-radius:10px;">{int(round(r["pct"]))}th</span>
+              </div>
+            </div>'''
+            for r in items
+        ) if items else '<div style="color:#aaa;font-size:.8rem;padding:.5rem 0;">—</div>'
+        st.markdown(f'''<div style="background:#fff;border:1px solid #e4e4e0;border-top:3px solid {color};
+             border-radius:6px;padding:1rem 1.1rem;height:100%;">
+          <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+               color:{color};margin-bottom:.5rem;">{icon} {title}</div>
+          {lines}
+        </div>''', unsafe_allow_html=True)
+
+    with c_str:
+        asset_card("Top Assets", strengths, "#2e7d32", "💚")
+    with c_weak:
+        asset_card("Areas to Develop", weaknesses, RED, "🔴")
+
+    st.markdown("<div style='margin:.75rem 0'></div>", unsafe_allow_html=True)
+
+    # ── Bar chart + Pizza chart ──────────────────────────────────────────────
+    c_bars, c_pizza = st.columns([1, 1])
+
+    with c_bars:
+        st.markdown('<span class="pill">Percentile Ranks</span>', unsafe_allow_html=True)
+        bar_rows_html = []
         for r in rows:
             color = _GROUP_COLORS.get(r["group"], "#888")
-            bar_w  = max(int(r["pct"]), 2)
-            val_fmt = f"{r['val']:.2f}"
-            pct_fmt = f"{int(round(r['pct']))}"
-            bar_rows.append(
+            bw    = max(int(r["pct"]), 2)
+            bar_rows_html.append(
                 f'<tr>'
-                f'<td style="text-align:right;padding:3px 8px;font-size:.75rem;color:#555;white-space:nowrap">{r["stat"]}</td>'
-                f'<td style="text-align:right;padding:3px 6px;font-size:.75rem;font-weight:600;color:{NAVY}">{val_fmt}</td>'
-                f'<td style="padding:3px 6px;font-size:.75rem;font-weight:700;color:{NAVY};width:28px;text-align:right">{pct_fmt}</td>'
-                f'<td style="padding:3px 6px;width:140px">'
-                f'<div style="background:#f0f0ec;border-radius:3px;height:10px;">'
-                f'<div style="background:{color};width:{bar_w}%;height:10px;border-radius:3px;"></div>'
+                f'<td style="text-align:right;padding:4px 8px;font-size:.75rem;color:#555;white-space:nowrap;">{r["stat"]}</td>'
+                f'<td style="text-align:right;padding:4px 6px;font-size:.75rem;font-weight:600;color:{NAVY};width:42px;">{r["val"]:.2f}</td>'
+                f'<td style="text-align:right;padding:4px 6px;font-size:.75rem;font-weight:700;color:{color};width:32px;">{int(round(r["pct"]))}</td>'
+                f'<td style="padding:4px 6px;width:160px;">'
+                f'<div style="background:#f0f0ec;border-radius:4px;height:12px;">'
+                f'<div style="background:{color};width:{bw}%;height:12px;border-radius:4px;transition:width .3s;"></div>'
                 f'</div></td>'
                 f'</tr>'
             )
         st.markdown(
+            f'<div style="background:#fff;border:1px solid #e4e4e0;border-radius:6px;padding:1rem;overflow-x:auto;">'
             f'<table style="width:100%;border-collapse:collapse;">'
             f'<thead><tr>'
-            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 8px;font-weight:600">STAT</th>'
-            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">VALUE</th>'
-            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">PCT</th>'
-            f'<th style="font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">PERCENTILE</th>'
+            f'<th style="text-align:right;font-size:.62rem;color:#aaa;padding:3px 8px;font-weight:600;">STAT</th>'
+            f'<th style="text-align:right;font-size:.62rem;color:#aaa;padding:3px 6px;font-weight:600;">VALUE</th>'
+            f'<th style="text-align:right;font-size:.62rem;color:#aaa;padding:3px 6px;font-weight:600;">PCT</th>'
+            f'<th style="font-size:.62rem;color:#aaa;padding:3px 6px;font-weight:600;"></th>'
             f'</tr></thead>'
-            f'<tbody>{"".join(bar_rows)}</tbody>'
-            f'</table>',
+            f'<tbody>{"".join(bar_rows_html)}</tbody>'
+            f'</table></div>',
             unsafe_allow_html=True,
         )
 
-    # ── Right: pizza chart ────────────────────────────────────────────────────
-    with col_pizza:
-        labels  = [r["stat"] for r in rows]
-        pcts    = [r["pct"]  for r in rows]
-        colors  = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
-        n       = len(labels)
-        step    = 360 / n
-        thetas  = [i * step + step / 2 for i in range(n)]
+    with c_pizza:
+        st.markdown('<span class="pill">Radar Chart</span>', unsafe_allow_html=True)
+        labels = [r["stat"]  for r in rows]
+        pcts   = [r["pct"]   for r in rows]
+        colors = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
+        n      = len(labels)
+        step   = 360 / n
+        thetas = [i * step + step / 2 for i in range(n)]
 
-        # background ring at 100
         fig = go.Figure()
         fig.add_trace(go.Barpolar(
-            r=[100] * n, theta=thetas, width=[step * 0.98] * n,
-            marker_color=["#f0f0ec"] * n, marker_line_width=0,
+            r=[100]*n, theta=thetas, width=[step*.98]*n,
+            marker_color=["#f0f0ec"]*n, marker_line_width=0,
             hoverinfo="skip", showlegend=False,
         ))
         fig.add_trace(go.Barpolar(
-            r=pcts, theta=thetas, width=[step * 0.98] * n,
+            r=pcts, theta=thetas, width=[step*.98]*n,
             marker_color=colors, marker_line_color="white", marker_line_width=1.5,
             opacity=0.88, showlegend=False,
             customdata=[[r["stat"], r["val"], r["pct"]] for r in rows],
-            hovertemplate="<b>%{customdata[0]}</b><br>Value: %{customdata[1]:.2f}<br>Pct: %{customdata[2]:.0f}<extra></extra>",
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:.2f} · %{customdata[2]:.0f}th pct<extra></extra>",
         ))
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=False, range=[0, 100]),
-                angularaxis=dict(
-                    tickvals=thetas, ticktext=labels,
-                    direction="clockwise", rotation=90,
-                    tickfont=dict(size=9, color=NAVY),
-                ),
+                radialaxis=dict(visible=False, range=[0,100]),
+                angularaxis=dict(tickvals=thetas, ticktext=labels,
+                                 direction="clockwise", rotation=90,
+                                 tickfont=dict(size=9, color=NAVY)),
                 bgcolor="white",
             ),
-            showlegend=False,
-            height=380,
-            margin=dict(l=70, r=70, t=30, b=30),
+            showlegend=False, height=400,
+            margin=dict(l=80, r=80, t=20, b=20),
             paper_bgcolor="white",
         )
+        st.plotly_chart(fig, use_container_width=True)
 
-        # legend
+        # group legend
         seen = {}
         for r in rows:
-            g = r["group"]
-            if g not in seen:
-                seen[g] = _GROUP_COLORS.get(g, "#888")
-        legend_html = " ".join(
+            if r["group"] not in seen:
+                seen[r["group"]] = _GROUP_COLORS.get(r["group"], "#888")
+        leg = " ".join(
             f'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:.68rem;color:#555;">'
             f'<span style="width:10px;height:10px;border-radius:2px;background:{c};display:inline-block;"></span>{g}</span>'
             for g, c in seen.items()
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown(f'<div style="text-align:center;margin-top:-.5rem;">{legend_html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="text-align:center;">{leg}</div>', unsafe_allow_html=True)
+
+    # ── Similar players ──────────────────────────────────────────────────────
+    st.markdown("<div style='margin:.75rem 0'></div>", unsafe_allow_html=True)
+    st.markdown('<span class="pill">Similar Players</span>', unsafe_allow_html=True)
+    sim_df = find_similar_players(player_name, full_df)
+    if not sim_df.empty:
+        float_cols = sim_df.select_dtypes(include="float").columns
+        fmt = {c: "{:.2f}" for c in float_cols}
+        styler = sim_df.style.hide(axis="index").format(fmt, na_rep="—")
+        st.dataframe(styler, use_container_width=True, hide_index=True,
+                     height=38 + len(sim_df)*35)
+    else:
+        st.caption("Not enough position peers to compute similarity.")
 
 
 def download_buttons(df_dl, label):
@@ -1124,8 +1220,8 @@ if not df.empty:
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc, tab_teams = st.tabs([
-    "📊  Summary", "⚽  Shooting", "🎯  Passing", "🛡  Defence", "🧤  Goalkeeping", "🃏  Discipline & Duels", "🏟  Teams"
+tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc, tab_teams, tab_profile = st.tabs([
+    "📊  Summary", "⚽  Shooting", "🎯  Passing", "🛡  Defence", "🧤  Goalkeeping", "🃏  Discipline & Duels", "🏟  Teams", "👤  Player Profile"
 ])
 
 
@@ -1154,7 +1250,8 @@ with tab_sum:
     if ev.selection.rows:
         sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1198,7 +1295,8 @@ with tab_shoot:
     if ev.selection.rows:
         sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1219,7 +1317,8 @@ with tab_pass:
     if ev.selection.rows:
         sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1244,7 +1343,8 @@ with tab_def:
     if ev.selection.rows:
         sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1279,7 +1379,8 @@ with tab_gk:
         if ev.selection.rows:
             sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
             if sel_player:
-                player_scouting_report(sel_player, player_df)
+                st.session_state["profile_player"] = sel_player
+                st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1301,7 +1402,8 @@ with tab_misc:
     if ev.selection.rows:
         sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
     st.markdown('<span class="pill">Dribbles & Aerials</span>', unsafe_allow_html=True)
     df_duel = sort_df(df, sort_duel)
@@ -1317,7 +1419,8 @@ with tab_misc:
     if ev2.selection.rows:
         sel_player = shown2.iloc[ev2.selection.rows[0]].get("Player")
         if sel_player:
-            player_scouting_report(sel_player, player_df)
+            st.session_state["profile_player"] = sel_player
+            st.info(f"👤 **{sel_player}** selected — open the **Player Profile** tab to view full report.")
 
     st.markdown('<p class="footnote">FoulsCom = fouls committed. FoulsWon = fouls drawn. Drib% = successful take-on rate. Aer% = aerial duel win %.</p>', unsafe_allow_html=True)
 
@@ -1412,3 +1515,10 @@ with tab_teams:
         download_buttons(ta.reset_index(drop=True), "teams_all_stats")
 
         st.markdown('<p class="footnote">All stats are season totals. /G = per match average. xGD = xG differential (xG for minus xG against). G-xG = goals vs expected (positive = over-performing).</p>', unsafe_allow_html=True)
+
+with tab_profile:
+    profile_player = st.session_state.get("profile_player")
+    if not profile_player:
+        st.info("Click any player row in the other tabs to open their profile here.")
+    else:
+        render_player_profile(profile_player, player_df)
