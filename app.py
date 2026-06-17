@@ -796,10 +796,13 @@ def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
         if c in df_show.columns:
             col_cfg[c] = st.column_config.NumberColumn(c, format="%.1f %%")
 
+    row_h = 35
+    header_h = 38
     st.dataframe(
         styler,
         use_container_width=True,
         hide_index=True,
+        height=header_h + len(df_show) * row_h,
         column_config=col_cfg if col_cfg else None,
     )
 
