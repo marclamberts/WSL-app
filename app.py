@@ -559,9 +559,16 @@ def build_player_summary(match_df, xg_df):
     grp = match_df.groupby("Player").agg(
         GP       =("Match","nunique"),
         Starts   =("Starter","sum"),
-        Pos      =("Pos","first"),
         **{c: (c,"sum") for c in sum_cols if c in match_df.columns},
     ).reset_index()
+
+    # Position = most-played position by minutes
+    pos_by_mins = (
+        match_df.groupby(["Player","Pos"])["Mins"].sum()
+        .reset_index().sort_values("Mins", ascending=False)
+        .drop_duplicates("Player")[["Player","Pos"]]
+    )
+    grp = grp.merge(pos_by_mins, on="Player", how="left")
 
     # Primary team = club where player logged the most minutes
     team_by_mins = (
@@ -928,7 +935,7 @@ def _compute_pct_rows(player_name, full_df):
     prow = prow.iloc[0]
     pos   = prow.get("Pos", "FWD")
     stat_defs = _SCOUT_GK if pos == "GK" else _SCOUT_OUTFIELD
-    peers = full_df[(full_df["Pos"] == pos) & (full_df["Mins"] >= 450)].copy()
+    peers = full_df[(full_df["Pos"] == pos) & (full_df["Mins"] >= 450) & (full_df["Pos"] != "SUB")].copy()
     rows = []
     for col, label, group, inv in stat_defs:
         if col not in full_df.columns:
