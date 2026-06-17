@@ -159,46 +159,8 @@ st.markdown(f"""
   .kpi-card .kv {{ font-size: 1.35rem; font-weight: 800; color: {NAVY}; line-height: 1.15; margin: .2rem 0 .1rem; }}
   .kpi-card .ks {{ font-size: .72rem; color: #666; }}
 
-  /* ── Tables ── */
-  .tbl-wrap {{
-    background: #fff;
-    border: 1px solid #e4e4e0;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
-    overflow-x: auto; margin-bottom: 1.25rem;
-    border-radius: 6px;
-  }}
-  .tbl-wrap table {{ border-collapse: collapse; width: 100%; font-size: .8rem; white-space: nowrap; }}
-  .tbl-wrap thead tr {{
-    background: {NAVY}; color: #fff;
-    font-size: .67rem; font-weight: 600;
-    text-transform: uppercase; letter-spacing: .9px;
-  }}
-  .tbl-wrap thead th {{
-    padding: 9px 13px; text-align: right;
-    border-right: 1px solid #1a2e42;
-    position: sticky; top: 0;
-  }}
-  .tbl-wrap thead th.left {{ text-align: left; }}
-  .tbl-wrap tbody tr {{ border-bottom: 1px solid #f0f0ec; transition: background .08s; }}
-  .tbl-wrap tbody tr:hover {{ background: #f0f5ff !important; }}
-  .tbl-wrap tbody tr:nth-child(even) {{ background: #fafaf7; }}
-  .tbl-wrap tbody td {{ padding: 7px 13px; text-align: right; }}
-  .tbl-wrap tbody td.left  {{ text-align: left; }}
-  .tbl-wrap tbody td.rank  {{ text-align: center; color: #aaa; font-weight: 600; font-size: .75rem; width: 32px; }}
-  .tbl-wrap tbody td.name  {{ font-weight: 600; color: {NAVY}; }}
-  .tbl-wrap tbody td.team  {{ color: #777; font-size: .76rem; }}
-  .tbl-wrap tbody td.pos   {{ text-align: center; }}
-
-  /* ── Position badges ── */
-  .pos-badge {{
-    border-radius: 3px; padding: 2px 6px;
-    font-size: .66rem; font-weight: 700; color: #fff;
-    letter-spacing: .3px;
-  }}
-  .pos-GK  {{ background: #7b1fa2; }}
-  .pos-DEF {{ background: #1565c0; }}
-  .pos-MID {{ background: #2e7d32; }}
-  .pos-FWD {{ background: {RED}; }}
+  /* ── Dataframe container ── */
+  [data-testid="stDataFrame"] {{ border-radius: 6px; overflow: hidden; margin-bottom: 1rem; }}
 
   /* ── Tabs ── */
   [data-testid="stTabs"] {{
@@ -795,62 +757,37 @@ def fmt_val(val, decimals=1):
         return f"{val:.{decimals}f}"
     return str(int(val))
 
-def render_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
-                 left_cols=None, pct_cols=None):
+def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
+               left_cols=None, pct_cols=None):
     heat_cols = heat_cols or []
     inv_cols  = inv_cols  or []
     pal_map   = pal_map   or {}
-    left_cols = left_cols or ["Player","Team","Pos"]
     pct_cols  = pct_cols  or []
 
-    # compute min/max for heat
-    col_stats = {}
-    for c in heat_cols:
+    styler = df_show.style.hide(axis="index")
+
+    for col in heat_cols:
+        if col not in df_show.columns:
+            continue
+        pal  = pal_map.get(col, "blue")
+        base = {"green": "Greens", "red": "Reds", "blue": "Blues"}.get(pal, "Blues")
+        cmap = (base + "_r") if col in inv_cols else base
+        try:
+            styler = styler.background_gradient(subset=[col], cmap=cmap, axis=0)
+        except Exception:
+            pass
+
+    col_cfg = {}
+    for c in pct_cols:
         if c in df_show.columns:
-            vals = pd.to_numeric(df_show[c], errors="coerce").dropna()
-            if len(vals):
-                col_stats[c] = (float(vals.min()), float(vals.max()))
+            col_cfg[c] = st.column_config.NumberColumn(c, format="%.1f %%")
 
-    header = "".join(
-        f'<th class="left">{c}</th>' if c in left_cols else f"<th>{c}</th>"
-        for c in df_show.columns
+    st.dataframe(
+        styler,
+        use_container_width=True,
+        hide_index=True,
+        column_config=col_cfg if col_cfg else None,
     )
-    rows_html = []
-    for i, row in enumerate(df_show.itertuples(index=False), 1):
-        cells = []
-        for c in df_show.columns:
-            val = getattr(row, c.replace(" ","_").replace("/","_").replace("%","_").replace("-","_"), None)
-            val = row[df_show.columns.get_loc(c)]
-            style = ""
-            if c == "Rank":
-                cell = f'<td class="rank">{i}</td>'
-                cells.append(cell); continue
-            elif c == "Player":
-                cell = f'<td class="name left">{val}</td>'
-                cells.append(cell); continue
-            elif c == "Team":
-                cell = f'<td class="team left">{val}</td>'
-                cells.append(cell); continue
-            elif c == "Pos":
-                cell = f'<td class="pos">{pos_badge(val) if val in ALL_POS else val}</td>'
-                cells.append(cell); continue
-            else:
-                if c in col_stats:
-                    vmin, vmax = col_stats[c]
-                    style = heat(val, vmin, vmax, pal_map.get(c,"blue"), c in inv_cols)
-                decimals = 1 if c in pct_cols or "/" in c else (2 if isinstance(val, float) and not pd.isna(val) and abs(float(val)) < 10 else 0)
-                cell_txt = fmt_val(val, decimals)
-                td_class = "left" if c in left_cols else ""
-                cells.append(f'<td class="{td_class}" style="{style}">{cell_txt}</td>')
-        rows_html.append("<tr>" + "".join(cells) + "</tr>")
-
-    st.markdown(f"""
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr>{header}</tr></thead>
-        <tbody>{"".join(rows_html)}</tbody>
-      </table>
-    </div>""", unsafe_allow_html=True)
 
 
 def download_buttons(df_dl, label):
@@ -932,28 +869,26 @@ tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc, tab_teams = st.tabs([
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_sum:
     st.markdown('<span class="pill">Player Summary</span>', unsafe_allow_html=True)
-
-    sort_sum = st.selectbox("Sort by", ["Goals","xG","Mins","GP","Shots","Passes","Tackles","KP"], key="ss")
-    df_s = top_n(df, sort_sum, show_n)
-
-    cols_sum = ["Player","Team","Pos","GP","Starts","Mins","Goals","xG","G-xG","Shots","Passes","Pass%","KP","Tackles","Yellow","Red"]
-    cols_sum = [c for c in cols_sum if c in df_s.columns]
-
-    if per90_mode:
-        for c, r in [("Goals","G/90"),("xG","xG/90"),("Shots","Sh/90"),("Passes","Pass/90"),("KP","KP/90"),("Tackles","Tkl/90")]:
-            if r in df_s.columns:
-                cols_sum = [r if x==c else x for x in cols_sum]
-        cols_sum = list(dict.fromkeys(cols_sum))  # dedupe
-
-    df_s = df_s[[c for c in cols_sum if c in df_s.columns]]
-    render_table(df_s,
-        heat_cols=["Goals","xG","G-xG","Mins","Passes","KP","G/90","xG/90","Sh/90"],
-        inv_cols=[],
-        pal_map={"Goals":"green","xG":"green","G-xG":"blue","Mins":"blue",
-                 "Passes":"blue","G/90":"green","xG/90":"green"},
-    )
-    st.markdown('<p class="footnote">G-xG = goals minus expected goals (positive = overperforming). KP = key passes.</p>', unsafe_allow_html=True)
-    download_buttons(df_s, "summary")
+    c_ctrl, c_tbl = st.columns([1, 4])
+    with c_ctrl:
+        sort_sum = st.selectbox("Sort by", ["Goals","xG","Mins","GP","Shots","Passes","Tackles","KP"], key="ss")
+    with c_tbl:
+        df_s = top_n(df, sort_sum, show_n)
+        cols_sum = ["Player","Team","Pos","GP","Starts","Mins","Goals","xG","G-xG","Shots","Passes","Pass%","KP","Tackles","Yellow","Red"]
+        cols_sum = [c for c in cols_sum if c in df_s.columns]
+        if per90_mode:
+            for c, r in [("Goals","G/90"),("xG","xG/90"),("Shots","Sh/90"),("Passes","Pass/90"),("KP","KP/90"),("Tackles","Tkl/90")]:
+                if r in df_s.columns:
+                    cols_sum = [r if x==c else x for x in cols_sum]
+            cols_sum = list(dict.fromkeys(cols_sum))
+        df_s = df_s[[c for c in cols_sum if c in df_s.columns]]
+        show_table(df_s,
+            heat_cols=["Goals","xG","G-xG","Mins","Passes","KP","G/90","xG/90","Sh/90"],
+            pal_map={"Goals":"green","xG":"green","G-xG":"blue","Mins":"blue",
+                     "Passes":"blue","G/90":"green","xG/90":"green"},
+        )
+        st.markdown('<p class="footnote">G-xG = goals minus expected goals (positive = overperforming). KP = key passes.</p>', unsafe_allow_html=True)
+        download_buttons(df_s, "summary")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -966,18 +901,13 @@ with tab_shoot:
     sum_cols = ["GP","Mins","Goals","Shots","xG","npxG","BigCh"]
     agg_map   = {c: "sum" for c in sum_cols if c in df.columns}
     agg_map["Pos"] = "first"
-
     sh_agg = df.groupby("Player").agg(agg_map).reset_index()
-
-    # Team = the club the player spent most minutes with
     team_by_mins = (
         df.groupby(["Player","Team"])["Mins"].sum()
-        .reset_index()
-        .sort_values("Mins", ascending=False)
+        .reset_index().sort_values("Mins", ascending=False)
         .drop_duplicates("Player")[["Player","Team"]]
     )
     sh_agg = sh_agg.merge(team_by_mins, on="Player", how="left")
-
     m90 = sh_agg["Mins"].replace(0, np.nan) / 90
     sh_agg["G/90"]  = (sh_agg["Goals"] / m90).round(2)
     sh_agg["xG/90"] = (sh_agg["xG"]   / m90).round(2)
@@ -986,21 +916,22 @@ with tab_shoot:
     sh_agg["xG/Sh"] = (sh_agg["xG"]   / sh_agg["Shots"].replace(0, np.nan)).round(3)
     sh_agg["G-xG"]  = (sh_agg["Goals"] - sh_agg["xG"]).round(2)
     sh_agg["BigCh"] = sh_agg["BigCh"].fillna(0).astype(int) if "BigCh" in sh_agg.columns else 0
+    sh_agg = sh_agg[sh_agg["Mins"] >= min_mins]
 
-    sort_sh = st.selectbox("Sort by", ["xG","Goals","Shots","G-xG","xG/90","Sh/90","G/90","G/Sh","xG/Sh","BigCh","Mins"], key="ssh")
-    sh_agg  = sh_agg[sh_agg["Mins"] >= min_mins]
-    sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).head(show_n).reset_index(drop=True)
-
-    cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
-    cols_sh = [c for c in cols_sh if c in sh_sorted.columns]
-
-    render_table(sh_sorted[cols_sh],
-        heat_cols=["Goals","xG","Shots","G-xG","BigCh","xG/90","Sh/90","G/90","G/Sh","xG/Sh"],
-        pal_map={"Goals":"green","xG":"green","Shots":"blue","G-xG":"blue",
-                 "BigCh":"green","xG/90":"green","G/90":"green"},
-    )
-    st.markdown('<p class="footnote">Aggregated season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. xG/Sh = xG per shot. BigCh = big chances.</p>', unsafe_allow_html=True)
-    download_buttons(sh_sorted[cols_sh], "shooting")
+    c_ctrl, c_tbl = st.columns([1, 4])
+    with c_ctrl:
+        sort_sh = st.selectbox("Sort by", ["xG","Goals","Shots","G-xG","xG/90","Sh/90","G/90","G/Sh","xG/Sh","BigCh","Mins"], key="ssh")
+    with c_tbl:
+        sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).head(show_n).reset_index(drop=True)
+        cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
+        cols_sh = [c for c in cols_sh if c in sh_sorted.columns]
+        show_table(sh_sorted[cols_sh],
+            heat_cols=["Goals","xG","Shots","G-xG","BigCh","xG/90","Sh/90","G/90","G/Sh","xG/Sh"],
+            pal_map={"Goals":"green","xG":"green","Shots":"blue","G-xG":"blue",
+                     "BigCh":"green","xG/90":"green","G/90":"green"},
+        )
+        st.markdown('<p class="footnote">Season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. BigCh = big chances.</p>', unsafe_allow_html=True)
+        download_buttons(sh_sorted[cols_sh], "shooting")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1008,20 +939,20 @@ with tab_shoot:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_pass:
     st.markdown('<span class="pill">Passing Statistics</span>', unsafe_allow_html=True)
-
-    sort_pa = st.selectbox("Sort by", ["Passes","Pass%","KP","Pass/90","KP/90"], key="spa")
-    df_pa = top_n(df[df["Passes"] > 0], sort_pa, show_n)
-
-    cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","Pass/90","KP/90","FoulsWon"]
-    cols_pa = [c for c in cols_pa if c in df_pa.columns]
-    df_pa = df_pa[cols_pa]
-
-    render_table(df_pa,
-        heat_cols=["Passes","PassCmp","Pass%","KP","Pass/90","KP/90"],
-        pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","Pass/90":"blue","KP/90":"green"},
-    )
-    st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes (Opta qualifier). FoulsWon = fouls drawn.</p>', unsafe_allow_html=True)
-    download_buttons(df_pa, "passing")
+    c_ctrl, c_tbl = st.columns([1, 4])
+    with c_ctrl:
+        sort_pa = st.selectbox("Sort by", ["Passes","Pass%","KP","Pass/90","KP/90"], key="spa")
+    with c_tbl:
+        df_pa = top_n(df[df["Passes"] > 0], sort_pa, show_n)
+        cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","Pass/90","KP/90","FoulsWon"]
+        cols_pa = [c for c in cols_pa if c in df_pa.columns]
+        df_pa = df_pa[cols_pa]
+        show_table(df_pa,
+            heat_cols=["Passes","PassCmp","Pass%","KP","Pass/90","KP/90"],
+            pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","Pass/90":"blue","KP/90":"green"},
+        )
+        st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes. FoulsWon = fouls drawn.</p>', unsafe_allow_html=True)
+        download_buttons(df_pa, "passing")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1029,24 +960,24 @@ with tab_pass:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_def:
     st.markdown('<span class="pill">Defensive Statistics</span>', unsafe_allow_html=True)
-
-    df_def_base = df[df["Pos"].isin(["DEF","MID","FWD","GK"])]
-    sort_de = st.selectbox("Sort by", ["Tackles","TklWon","Inter","Clears","Tkl%","Tkl/90","Int/90","Aerials","Aer%"], key="sde")
-    df_de = top_n(df_def_base, sort_de, show_n)
-
-    cols_de = ["Player","Team","Pos","GP","Mins","Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90","FoulsCom","Yellow","Red"]
-    cols_de = [c for c in cols_de if c in df_de.columns]
-    df_de = df_de[cols_de]
-
-    render_table(df_de,
-        heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90"],
-        inv_cols=["FoulsCom","Yellow","Red"],
-        pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
-                 "Aerials":"blue","Aer%":"green","Tkl/90":"blue","Int/90":"blue"},
-        pct_cols=["Tkl%","Aer%"],
-    )
-    st.markdown('<p class="footnote">TklWon = tackles won. Tkl% = tackle success rate. Aer% = aerial duel win rate.</p>', unsafe_allow_html=True)
-    download_buttons(df_de, "defence")
+    c_ctrl, c_tbl = st.columns([1, 4])
+    with c_ctrl:
+        sort_de = st.selectbox("Sort by", ["Tackles","TklWon","Inter","Clears","Tkl%","Tkl/90","Int/90","Aerials","Aer%"], key="sde")
+    with c_tbl:
+        df_def_base = df[df["Pos"].isin(["DEF","MID","FWD","GK"])]
+        df_de = top_n(df_def_base, sort_de, show_n)
+        cols_de = ["Player","Team","Pos","GP","Mins","Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90","FoulsCom","Yellow","Red"]
+        cols_de = [c for c in cols_de if c in df_de.columns]
+        df_de = df_de[cols_de]
+        show_table(df_de,
+            heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90"],
+            inv_cols=["FoulsCom","Yellow","Red"],
+            pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
+                     "Aerials":"blue","Aer%":"green","Tkl/90":"blue","Int/90":"blue"},
+            pct_cols=["Tkl%","Aer%"],
+        )
+        st.markdown('<p class="footnote">TklWon = tackles won. Tkl% = tackle success rate. Aer% = aerial duel win rate.</p>', unsafe_allow_html=True)
+        download_buttons(df_de, "defence")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1076,7 +1007,7 @@ with tab_gk:
         cols_gk = [c for c in cols_gk if c in df_gk_s.columns]
         df_gk_s = df_gk_s[cols_gk]
 
-        render_table(df_gk_s,
+        show_table(df_gk_s,
             heat_cols=["Saves","Save%","CS"],
             inv_cols=["GA","GA/90"],
             pal_map={"Saves":"blue","Save%":"green","CS":"green","GA":"red","GA/90":"red"},
@@ -1100,7 +1031,7 @@ with tab_misc:
         df_disc = top_n(df, sort_disc, show_n)
         cols_disc = ["Player","Team","Pos","GP","Mins","FoulsCom","FoulsWon","Yellow","Red"]
         cols_disc = [c for c in cols_disc if c in df_disc.columns]
-        render_table(df_disc[cols_disc],
+        show_table(df_disc[cols_disc],
             heat_cols=["FoulsCom","Yellow","Red","FoulsWon"],
             inv_cols=["FoulsCom","Yellow","Red"],
             pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green"},
@@ -1113,7 +1044,7 @@ with tab_misc:
         df_duel = top_n(df, sort_duel, show_n)
         cols_duel = ["Player","Team","Pos","GP","Mins","Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"]
         cols_duel = [c for c in cols_duel if c in df_duel.columns]
-        render_table(df_duel[cols_duel],
+        show_table(df_duel[cols_duel],
             heat_cols=["Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"],
             pal_map={"Dribbles":"blue","DribWon":"green","Drib%":"green",
                      "Aerials":"blue","AerWon":"green","Aer%":"green"},
@@ -1143,7 +1074,7 @@ with tab_teams:
         cols_atk = ["Rank","Team","GP","Goals","Shots","xG","xGA","xGD","G-xG","KP",
                     "Goals/G","Shots/G","xG/G","xGA/G","KP/G"]
         cols_atk = [c for c in cols_atk if c in ta_atk.columns]
-        render_table(ta_atk[cols_atk],
+        show_table(ta_atk[cols_atk],
             heat_cols=["Goals","Shots","xG","xGD","G-xG","KP","Goals/G","xG/G","Shots/G","KP/G"],
             inv_cols=["xGA","xGA/G"],
             pal_map={"Goals":"green","Shots":"blue","xG":"green","xGD":"blue","G-xG":"green",
@@ -1159,7 +1090,7 @@ with tab_teams:
         ta_pass.insert(0, "Rank", ta_pass.index + 1)
         cols_pass = ["Rank","Team","GP","Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"]
         cols_pass = [c for c in cols_pass if c in ta_pass.columns]
-        render_table(ta_pass[cols_pass],
+        show_table(ta_pass[cols_pass],
             heat_cols=["Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"],
             pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green",
                      "Passes/G":"blue","PassCmp/G":"blue","KP/G":"green"},
@@ -1182,7 +1113,7 @@ with tab_teams:
                     "Aerials","AerWon","Aer%","Aerials/G","AerWon/G",
                     "xGA","xGA/G"]
         cols_def = [c for c in cols_def if c in ta_def.columns]
-        render_table(ta_def[cols_def],
+        show_table(ta_def[cols_def],
             heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aer%","Save%","Saves",
                        "Tackles/G","TklWon/G","Inter/G","Clears/G","AerWon","Aerials/G","AerWon/G","Saves/G"],
             inv_cols=["GA","xGA","GA/G","xGA/G"],
@@ -1206,7 +1137,7 @@ with tab_teams:
                      "FoulsCom","FoulsWon","Yellow","Red","FoulsCom/G","FoulsWon/G","Yellow/G","Red/G",
                      "Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"]
         cols_disc = [c for c in cols_disc if c in ta_disc.columns]
-        render_table(ta_disc[cols_disc],
+        show_table(ta_disc[cols_disc],
             heat_cols=["FoulsWon","FoulsWon/G","Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"],
             inv_cols=["FoulsCom","Yellow","Red","FoulsCom/G","Yellow/G","Red/G"],
             pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green",
