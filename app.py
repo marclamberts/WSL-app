@@ -966,9 +966,17 @@ with tab_shoot:
     sum_cols = ["GP","Mins","Goals","Shots","xG","npxG","BigCh"]
     agg_map   = {c: "sum" for c in sum_cols if c in df.columns}
     agg_map["Pos"] = "first"
-    agg_map["Team"] = lambda x: "/".join(x.unique())   # e.g. "Arsenal/Chelsea"
 
     sh_agg = df.groupby("Player").agg(agg_map).reset_index()
+
+    # Team = the club the player spent most minutes with
+    team_by_mins = (
+        df.groupby(["Player","Team"])["Mins"].sum()
+        .reset_index()
+        .sort_values("Mins", ascending=False)
+        .drop_duplicates("Player")[["Player","Team"]]
+    )
+    sh_agg = sh_agg.merge(team_by_mins, on="Player", how="left")
 
     m90 = sh_agg["Mins"].replace(0, np.nan) / 90
     sh_agg["G/90"]  = (sh_agg["Goals"] / m90).round(2)
