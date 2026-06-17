@@ -923,7 +923,8 @@ def _pct_rank(series, val):
     arr = series.dropna().to_numpy(dtype=float)
     if len(arr) == 0:
         return 50.0
-    return float(np.sum(arr <= val) / len(arr) * 100)
+    raw = float(np.sum(arr < val) / len(arr) * 100)
+    return float(np.clip(raw, 1, 99))
 
 
 def _compute_pct_rows(player_name, full_df):
@@ -1099,7 +1100,7 @@ def render_player_profile(player_name, full_df):
 
         fig = go.Figure()
         fig.add_trace(go.Barpolar(
-            r=[100]*n, theta=thetas, width=[step*.98]*n,
+            r=[99]*n, theta=thetas, width=[step*.98]*n,
             marker_color=["#f0f0ec"]*n, marker_line_width=0,
             hoverinfo="skip", showlegend=False,
         ))
@@ -1112,7 +1113,7 @@ def render_player_profile(player_name, full_df):
         ))
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=False, range=[0,100]),
+                radialaxis=dict(visible=False, range=[0, 99]),
                 angularaxis=dict(tickvals=thetas, ticktext=labels,
                                  direction="clockwise", rotation=90,
                                  tickfont=dict(size=9, color=NAVY)),
