@@ -1090,49 +1090,47 @@ def render_player_profile(player_name, full_df):
         )
 
     with c_pizza:
-        st.markdown('<span class="pill">Radar Chart</span>', unsafe_allow_html=True)
-        labels = [r["stat"] for r in rows]
-        pcts   = [r["pct"]  for r in rows]
-        # close the polygon
-        labels_closed = labels + [labels[0]]
-        pcts_closed   = pcts   + [pcts[0]]
+        st.markdown('<span class="pill">Pizza Chart</span>', unsafe_allow_html=True)
+        labels = [r["stat"]  for r in rows]
+        pcts   = [r["pct"]   for r in rows]
+        colors = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
 
         fig = go.Figure()
-        # faint outer ring at 99
-        fig.add_trace(go.Scatterpolar(
-            r=[99] * (len(labels) + 1),
-            theta=labels_closed,
-            fill="toself",
-            fillcolor="#f0f0ec",
-            line=dict(color="#e0e0dc", width=1),
+        # grey background ring (full extent = 99)
+        fig.add_trace(go.Barpolar(
+            r=[99] * len(labels),
+            theta=labels,
+            marker_color="#f0f0ec",
+            marker_line_color="#e0e0dc",
+            marker_line_width=1,
             hoverinfo="skip",
             showlegend=False,
         ))
-        # player values
-        hover = [f"{r['stat']}: {r['val']:.2f} · {int(round(r['pct']))}th pct" for r in rows]
-        fig.add_trace(go.Scatterpolar(
-            r=pcts_closed,
-            theta=labels_closed,
-            fill="toself",
-            fillcolor="rgba(26,153,136,0.25)",
-            line=dict(color="#1a9988", width=2),
-            text=hover + [hover[0]],
-            hoverinfo="text",
+        # player slices
+        fig.add_trace(go.Barpolar(
+            r=pcts,
+            theta=labels,
+            marker_color=colors,
+            marker_line_color="white",
+            marker_line_width=1.5,
+            opacity=0.9,
             showlegend=False,
+            customdata=[[r["stat"], r["val"], int(round(r["pct"]))] for r in rows],
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:.2f} · %{customdata[2]}th pct<extra></extra>",
         ))
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=True, range=[0, 99],
-                                tickvals=[25, 50, 75],
-                                tickfont=dict(size=7, color="#bbb"),
-                                gridcolor="#e8e8e4", linecolor="#e8e8e4"),
-                angularaxis=dict(tickfont=dict(size=9, color=NAVY),
-                                 linecolor="#e0e0dc", gridcolor="#e8e8e4"),
+                radialaxis=dict(visible=False, range=[0, 99]),
+                angularaxis=dict(
+                    tickfont=dict(size=9, color=NAVY),
+                    direction="clockwise",
+                    rotation=90,
+                ),
                 bgcolor="white",
             ),
             showlegend=False,
-            height=420,
-            margin=dict(l=70, r=70, t=30, b=30),
+            height=440,
+            margin=dict(l=90, r=90, t=30, b=30),
             paper_bgcolor="white",
         )
         st.plotly_chart(fig, use_container_width=True)
