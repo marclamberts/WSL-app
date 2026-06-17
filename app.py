@@ -19,73 +19,240 @@ st.set_page_config(
 
 NAVY  = "#0d1b2a"
 RED   = "#e63946"
-CREAM = "#f5f5f0"
+CREAM = "#f7f7f5"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CSS
+# CSS — strip Streamlit chrome, custom design system
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-  html, body, [class*="css"] {{ font-family:'Inter',sans-serif; }}
-  .main {{ background:{CREAM}; }}
-  .block-container {{ padding-top:0 !important; }}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
-  [data-testid="stSidebar"] {{ background:{NAVY}; border-right:3px solid {RED}; }}
-  [data-testid="stSidebar"] * {{ color:#e0e0e0 !important; }}
-  [data-testid="stSidebar"] .stSlider [data-testid="stMarkdownContainer"] p {{ color:#aaa !important; font-size:.72rem; }}
-  [data-testid="stSidebar"] hr {{ border-color:#1f3048; }}
-
-  .hub-header {{
-    background:linear-gradient(135deg,{NAVY} 0%,#1a2e42 100%);
-    color:#fff; padding:1.3rem 2rem;
-    border-bottom:4px solid {RED};
-    margin:-1rem -1rem 1.5rem -1rem;
+  /* ── Reset & base ── */
+  html, body, [class*="css"], .stApp {{
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    color: {NAVY};
   }}
-  .hub-header h1 {{ margin:0; font-size:1.9rem; font-weight:800; letter-spacing:-.5px; }}
-  .hub-header p  {{ margin:.25rem 0 0; font-size:.83rem; color:#8ab4cc; }}
 
-  .pill {{ background:{RED}; color:#fff; font-size:.61rem; font-weight:700; letter-spacing:1.6px;
-           text-transform:uppercase; padding:3px 10px; border-radius:2px;
-           display:inline-block; margin-bottom:.55rem; }}
+  /* ── Hide Streamlit chrome ── */
+  #MainMenu, footer, header,
+  [data-testid="stToolbar"],
+  [data-testid="stDecoration"],
+  [data-testid="stStatusWidget"],
+  .viewerBadge_container__1QSob {{ display: none !important; }}
 
-  .kpi-row {{ display:flex; gap:.7rem; flex-wrap:wrap; margin-bottom:1.3rem; }}
-  .kpi-card {{ background:#fff; border-top:4px solid {NAVY}; padding:.85rem 1rem;
-               flex:1; min-width:120px; box-shadow:0 2px 6px rgba(0,0,0,.07); border-radius:0 0 4px 4px; }}
-  .kpi-card.red  {{ border-top-color:{RED}; }}
-  .kpi-card.blue {{ border-top-color:#2196f3; }}
-  .kpi-card.green{{ border-top-color:#4caf50; }}
-  .kpi-card .kl {{ font-size:.63rem; text-transform:uppercase; letter-spacing:1px; color:#888; }}
-  .kpi-card .kv {{ font-size:1.4rem; font-weight:800; color:{NAVY}; line-height:1.1; margin:.15rem 0; }}
-  .kpi-card .ks {{ font-size:.73rem; color:#555; }}
+  /* ── Main canvas ── */
+  .stApp {{ background: {CREAM}; }}
+  .block-container {{
+    padding: 0 2rem 3rem 2rem !important;
+    max-width: 1400px !important;
+  }}
 
-  .tbl-wrap {{ background:#fff; border:1px solid #ddd; box-shadow:0 2px 6px rgba(0,0,0,.05);
-               overflow-x:auto; margin-bottom:1.3rem; border-radius:4px; }}
-  .tbl-wrap table {{ border-collapse:collapse; width:100%; font-size:.81rem; white-space:nowrap; }}
-  .tbl-wrap thead tr {{ background:{NAVY}; color:#fff; font-size:.69rem; text-transform:uppercase; letter-spacing:.9px; }}
-  .tbl-wrap thead th {{ padding:8px 11px; text-align:right; border-right:1px solid #1f3048; cursor:default; }}
-  .tbl-wrap thead th.left {{ text-align:left; }}
-  .tbl-wrap tbody tr {{ border-bottom:1px solid #eee; }}
-  .tbl-wrap tbody tr:hover {{ background:#eef3ff !important; }}
-  .tbl-wrap tbody tr:nth-child(even) {{ background:#fafaf8; }}
-  .tbl-wrap tbody td {{ padding:6px 11px; text-align:right; color:#222; }}
-  .tbl-wrap tbody td.left {{ text-align:left; }}
-  .tbl-wrap tbody td.rank {{ text-align:center; color:#888; font-weight:600; }}
-  .tbl-wrap tbody td.name {{ font-weight:600; color:{NAVY}; }}
-  .tbl-wrap tbody td.team {{ color:#555; font-size:.78rem; }}
-  .tbl-wrap tbody td.pos  {{ text-align:center; }}
+  /* ── Sidebar ── */
+  [data-testid="stSidebar"] {{
+    background: {NAVY} !important;
+    border-right: none !important;
+    box-shadow: 2px 0 12px rgba(0,0,0,.15);
+  }}
+  [data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
+  [data-testid="stSidebar"] * {{ color: #c8d8e8 !important; }}
+  [data-testid="stSidebar"] hr {{ border-color: #1e3248 !important; margin: .75rem 0; }}
 
-  .pos-badge {{ border-radius:3px; padding:1px 6px; font-size:.7rem; font-weight:700; color:#fff; }}
-  .pos-GK  {{ background:#9c27b0; }}
-  .pos-DEF {{ background:#2196f3; }}
-  .pos-MID {{ background:#4caf50; }}
-  .pos-FWD {{ background:{RED}; }}
+  /* Sidebar section header */
+  [data-testid="stSidebar"] h3 {{
+    color: #ffffff !important;
+    font-size: .8rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.2px !important;
+    text-transform: uppercase !important;
+    margin: 1.2rem 0 .5rem !important;
+  }}
 
-  [data-testid="stTabs"] [role="tab"] {{ font-size:.77rem; font-weight:600; text-transform:uppercase; letter-spacing:.6px; padding:6px 16px; }}
-  [data-testid="stTabs"] [aria-selected="true"] {{ color:{RED} !important; border-bottom:3px solid {RED} !important; }}
+  /* Sidebar widget labels */
+  [data-testid="stSidebar"] label,
+  [data-testid="stSidebar"] .stSlider label {{
+    color: #8aafc8 !important;
+    font-size: .72rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: .8px !important;
+  }}
 
-  .footnote {{ font-size:.71rem; color:#999; margin-top:-.3rem; margin-bottom:.9rem; }}
-  .dl-row {{ display:flex; gap:.5rem; margin-bottom:1rem; }}
+  /* Sidebar multiselect + selectbox */
+  [data-testid="stSidebar"] [data-testid="stMultiSelect"] > div > div,
+  [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {{
+    background: #152535 !important;
+    border: 1px solid #1e3248 !important;
+    border-radius: 6px !important;
+    color: #e0eaf4 !important;
+  }}
+  [data-testid="stSidebar"] [data-baseweb="tag"] {{
+    background: {RED} !important;
+    border-radius: 3px !important;
+  }}
+  [data-testid="stSidebar"] [data-baseweb="tag"] span {{ color: #fff !important; }}
+
+  /* Sidebar slider */
+  [data-testid="stSidebar"] [data-testid="stSlider"] [role="slider"] {{
+    background: {RED} !important;
+  }}
+  [data-testid="stSidebar"] [data-testid="stSlider"] div[data-testid] > div > div:nth-child(2) {{
+    background: {RED} !important;
+  }}
+
+  /* Sidebar toggle */
+  [data-testid="stSidebar"] [data-testid="stToggle"] {{
+    accent-color: {RED};
+  }}
+  [data-testid="stSidebar"] [role="switch"][aria-checked="true"] {{
+    background-color: {RED} !important;
+  }}
+  [data-testid="stSidebar"] .stCaption p {{
+    color: #4a6882 !important;
+    font-size: .68rem !important;
+    line-height: 1.5;
+  }}
+
+  /* ── Page header band ── */
+  .hub-header {{
+    background: {NAVY};
+    color: #fff;
+    padding: 1.25rem 2rem;
+    border-bottom: 3px solid {RED};
+    margin: 0 -2rem 1.75rem -2rem;
+  }}
+  .hub-header h1 {{
+    margin: 0; font-size: 1.75rem; font-weight: 800; letter-spacing: -.5px;
+    display: flex; align-items: center; gap: .5rem;
+  }}
+  .hub-header h1 span.badge {{
+    font-size: .65rem; font-weight: 700; letter-spacing: 1.2px;
+    text-transform: uppercase; background: {RED};
+    padding: 3px 8px; border-radius: 3px; vertical-align: middle;
+  }}
+  .hub-header p {{ margin: .3rem 0 0; font-size: .8rem; color: #7a9db8; }}
+
+  /* ── Section pill ── */
+  .pill {{
+    background: {RED}; color: #fff;
+    font-size: .6rem; font-weight: 700; letter-spacing: 1.8px;
+    text-transform: uppercase; padding: 3px 9px;
+    border-radius: 2px; display: inline-block; margin-bottom: .6rem;
+  }}
+
+  /* ── KPI cards ── */
+  .kpi-row {{ display: flex; gap: .65rem; flex-wrap: wrap; margin-bottom: 1.5rem; }}
+  .kpi-card {{
+    background: #fff;
+    border-top: 3px solid {NAVY};
+    padding: .9rem 1.1rem;
+    flex: 1; min-width: 130px;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.04);
+    transition: box-shadow .15s;
+  }}
+  .kpi-card:hover {{ box-shadow: 0 2px 8px rgba(0,0,0,.1), 0 6px 20px rgba(0,0,0,.06); }}
+  .kpi-card.red   {{ border-top-color: {RED}; }}
+  .kpi-card.blue  {{ border-top-color: #2196f3; }}
+  .kpi-card.green {{ border-top-color: #2e7d32; }}
+  .kpi-card .kl {{ font-size: .62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #999; }}
+  .kpi-card .kv {{ font-size: 1.35rem; font-weight: 800; color: {NAVY}; line-height: 1.15; margin: .2rem 0 .1rem; }}
+  .kpi-card .ks {{ font-size: .72rem; color: #666; }}
+
+  /* ── Tables ── */
+  .tbl-wrap {{
+    background: #fff;
+    border: 1px solid #e4e4e0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    overflow-x: auto; margin-bottom: 1.25rem;
+    border-radius: 6px;
+  }}
+  .tbl-wrap table {{ border-collapse: collapse; width: 100%; font-size: .8rem; white-space: nowrap; }}
+  .tbl-wrap thead tr {{
+    background: {NAVY}; color: #fff;
+    font-size: .67rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .9px;
+  }}
+  .tbl-wrap thead th {{
+    padding: 9px 13px; text-align: right;
+    border-right: 1px solid #1a2e42;
+    position: sticky; top: 0;
+  }}
+  .tbl-wrap thead th.left {{ text-align: left; }}
+  .tbl-wrap tbody tr {{ border-bottom: 1px solid #f0f0ec; transition: background .08s; }}
+  .tbl-wrap tbody tr:hover {{ background: #f0f5ff !important; }}
+  .tbl-wrap tbody tr:nth-child(even) {{ background: #fafaf7; }}
+  .tbl-wrap tbody td {{ padding: 7px 13px; text-align: right; }}
+  .tbl-wrap tbody td.left  {{ text-align: left; }}
+  .tbl-wrap tbody td.rank  {{ text-align: center; color: #aaa; font-weight: 600; font-size: .75rem; width: 32px; }}
+  .tbl-wrap tbody td.name  {{ font-weight: 600; color: {NAVY}; }}
+  .tbl-wrap tbody td.team  {{ color: #777; font-size: .76rem; }}
+  .tbl-wrap tbody td.pos   {{ text-align: center; }}
+
+  /* ── Position badges ── */
+  .pos-badge {{
+    border-radius: 3px; padding: 2px 6px;
+    font-size: .66rem; font-weight: 700; color: #fff;
+    letter-spacing: .3px;
+  }}
+  .pos-GK  {{ background: #7b1fa2; }}
+  .pos-DEF {{ background: #1565c0; }}
+  .pos-MID {{ background: #2e7d32; }}
+  .pos-FWD {{ background: {RED}; }}
+
+  /* ── Tabs ── */
+  [data-testid="stTabs"] {{
+    border-bottom: 2px solid #e4e4e0;
+    margin-bottom: .1rem;
+  }}
+  [data-testid="stTabs"] [role="tablist"] {{ gap: 0; }}
+  [data-testid="stTabs"] [role="tab"] {{
+    font-size: .74rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .7px;
+    padding: 8px 20px; color: #888;
+    border-bottom: 3px solid transparent !important;
+    transition: color .15s;
+    margin-bottom: -2px;
+  }}
+  [data-testid="stTabs"] [role="tab"]:hover {{ color: {NAVY}; }}
+  [data-testid="stTabs"] [aria-selected="true"] {{
+    color: {RED} !important;
+    border-bottom-color: {RED} !important;
+  }}
+
+  /* ── Selectbox in main area ── */
+  [data-testid="stSelectbox"] > div > div {{
+    border-radius: 6px !important;
+    border-color: #ddd !important;
+    font-size: .82rem !important;
+  }}
+
+  /* ── Download buttons ── */
+  .stDownloadButton > button {{
+    background: #fff !important;
+    color: {NAVY} !important;
+    border: 1.5px solid #ddd !important;
+    border-radius: 6px !important;
+    font-size: .75rem !important;
+    font-weight: 600 !important;
+    padding: .35rem .9rem !important;
+    transition: all .15s !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06) !important;
+  }}
+  .stDownloadButton > button:hover {{
+    border-color: {RED} !important;
+    color: {RED} !important;
+    box-shadow: 0 2px 6px rgba(230,57,70,.15) !important;
+  }}
+
+  /* ── Footnote ── */
+  .footnote {{ font-size: .7rem; color: #aaa; margin-top: -.2rem; margin-bottom: .9rem; }}
+
+  /* ── Custom scrollbar ── */
+  ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+  ::-webkit-scrollbar-track {{ background: #f0f0ec; }}
+  ::-webkit-scrollbar-thumb {{ background: #ccc; border-radius: 3px; }}
+  ::-webkit-scrollbar-thumb:hover {{ background: #aaa; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -467,23 +634,26 @@ ALL_POS   = ["GK","DEF","MID","FWD"]
 # SIDEBAR FILTERS
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown(f"## ⚽ WSL Stats Hub")
-    st.markdown("**2025/26 Barclays WSL**")
-    st.markdown("---")
+    st.markdown(f"""
+    <div style="background:{RED};margin:-1rem -1rem 0 -1rem;padding:1rem 1.25rem .9rem;">
+      <div style="font-size:.62rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:.2rem;">Barclays WSL 2025/26</div>
+      <div style="font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:-.3px;">⚽ Stats Hub</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("#### Filters")
+    st.markdown("### Filters")
     sel_teams = st.multiselect("Team", ALL_TEAMS, placeholder="All teams")
     sel_pos   = st.multiselect("Position", ALL_POS, placeholder="All positions")
-    min_mins  = st.slider("Min. minutes played", 0, 900, 90, step=45)
+    min_mins  = st.slider("Min. minutes", 0, 900, 90, step=45)
 
     st.markdown("---")
-    st.markdown("#### Display")
+    st.markdown("### Display")
     per90_mode = st.toggle("Per-90 mode", value=False,
                            help="Show rate stats per 90 minutes instead of totals")
     show_n = st.slider("Rows to show", 10, 100, 30, step=10)
 
     st.markdown("---")
-    st.caption("Data: Opta  ·  Design: FBRef × FiveThirtyEight\nPosition & minutes from match lineups")
+    st.caption("Data: Opta / StatsBomb\nDesign: FBRef × FiveThirtyEight\nMinutes & positions from match lineups")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -613,10 +783,10 @@ n_players = len(df)
 n_matches = match_df["Match"].nunique() if not match_df.empty else 0
 st.markdown(f"""
 <div class="hub-header">
-  <h1>WSL Stats Hub</h1>
-  <p>2025/26 Barclays Women's Super League &nbsp;·&nbsp;
+  <h1>WSL Stats Hub <span class="badge">2025/26</span></h1>
+  <p>Barclays Women's Super League &nbsp;·&nbsp;
      {n_matches} matches &nbsp;·&nbsp; {n_players} players shown
-     {"&nbsp;·&nbsp; Per-90 mode ON" if per90_mode else ""}
+     {"&nbsp;·&nbsp; <strong style='color:#e9c46a'>Per-90 mode</strong>" if per90_mode else ""}
   </p>
 </div>
 """, unsafe_allow_html=True)
