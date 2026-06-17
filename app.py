@@ -985,36 +985,34 @@ with tab_def:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_gk:
     st.markdown('<span class="pill">Goalkeeping Statistics</span>', unsafe_allow_html=True)
-
     df_gk_base = df[df["Pos"] == "GK"].copy()
     if df_gk_base.empty:
         st.info("No goalkeeper data for current filters.")
     else:
-        # Clean sheets: matches where GA = 0
         cs_data = match_df[match_df["Pos"] == "GK"].groupby(["Player","Team"]).apply(
             lambda g: (g["GA"] == 0).sum()
         ).reset_index(name="CS") if not match_df.empty else pd.DataFrame(columns=["Player","Team","CS"])
-
         df_gk_m = df_gk_base.merge(cs_data, on=["Player","Team"], how="left")
         df_gk_m["CS"] = df_gk_m["CS"].fillna(0).astype(int)
         df_gk_m["GA/90"] = (df_gk_m["GA"] / (df_gk_m["Mins"] / 90).replace(0, np.nan)).round(2)
 
-        sort_gk = st.selectbox("Sort by", ["Saves","Save%","GA","CS","Mins","GA/90"], key="sgk")
-        asc_gk  = sort_gk in ("GA","GA/90")
-        df_gk_s = df_gk_m.sort_values(sort_gk, ascending=asc_gk).head(show_n).reset_index(drop=True)
-
-        cols_gk = ["Player","Team","GP","Starts","Mins","GA","Saves","Save%","CS","GA/90"]
-        cols_gk = [c for c in cols_gk if c in df_gk_s.columns]
-        df_gk_s = df_gk_s[cols_gk]
-
-        show_table(df_gk_s,
-            heat_cols=["Saves","Save%","CS"],
-            inv_cols=["GA","GA/90"],
-            pal_map={"Saves":"blue","Save%":"green","CS":"green","GA":"red","GA/90":"red"},
-            pct_cols=["Save%"],
-        )
-        st.markdown('<p class="footnote">Save% = saves/(saves+GA). CS = clean sheets. GA/90 = goals against per 90 min.</p>', unsafe_allow_html=True)
-        download_buttons(df_gk_s, "goalkeeping")
+        c_ctrl, c_tbl = st.columns([1, 4])
+        with c_ctrl:
+            sort_gk = st.selectbox("Sort by", ["Saves","Save%","GA","CS","Mins","GA/90"], key="sgk")
+        with c_tbl:
+            asc_gk  = sort_gk in ("GA","GA/90")
+            df_gk_s = df_gk_m.sort_values(sort_gk, ascending=asc_gk).head(show_n).reset_index(drop=True)
+            cols_gk = ["Player","Team","GP","Starts","Mins","GA","Saves","Save%","CS","GA/90"]
+            cols_gk = [c for c in cols_gk if c in df_gk_s.columns]
+            df_gk_s = df_gk_s[cols_gk]
+            show_table(df_gk_s,
+                heat_cols=["Saves","Save%","CS"],
+                inv_cols=["GA","GA/90"],
+                pal_map={"Saves":"blue","Save%":"green","CS":"green","GA":"red","GA/90":"red"},
+                pct_cols=["Save%"],
+            )
+            st.markdown('<p class="footnote">Save% = saves/(saves+GA). CS = clean sheets. GA/90 = goals against per 90 min.</p>', unsafe_allow_html=True)
+            download_buttons(df_gk_s, "goalkeeping")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
