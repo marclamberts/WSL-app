@@ -842,13 +842,186 @@ def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
 
     row_h = 35
     header_h = 38
-    st.dataframe(
+    event = st.dataframe(
         styler,
         use_container_width=True,
         hide_index=True,
         height=header_h + len(df_show) * row_h,
+        on_select="rerun",
+        selection_mode="single-row",
         column_config=col_cfg if col_cfg else None,
     )
+    return event, df_show
+
+
+# ── Scouting report stat definitions ─────────────────────────────────────────
+_SCOUT_OUTFIELD = [
+    # (col,        label,              group,        lower_is_better)
+    ("G/90",       "Goals p90",        "Attacking",  False),
+    ("xG/90",      "xG p90",           "Attacking",  False),
+    ("Sh/90",      "Shots p90",        "Attacking",  False),
+    ("G-xG",       "G − xG",           "Attacking",  False),
+    ("KP/90",      "Key Passes p90",   "Passing",    False),
+    ("xT/90",      "xT p90",           "Passing",    False),
+    ("Pass%",      "Pass Cmp %",       "Passing",    False),
+    ("Pass/90",    "Passes p90",       "Passing",    False),
+    ("Drib%",      "Dribble %",        "Duels",      False),
+    ("Aer%",       "Aerial Win %",     "Duels",      False),
+    ("Tkl/90",     "Tackles p90",      "Defence",    False),
+    ("Int/90",     "Interceptions p90","Defence",    False),
+    ("Tkl%",       "Tackle Win %",     "Defence",    False),
+]
+_SCOUT_GK = [
+    ("Save%",      "Save %",           "Goalkeeping", False),
+    ("Saves",      "Saves (total)",    "Goalkeeping", False),
+    ("GA",         "Goals Against",    "Goalkeeping", True),
+    ("Pass%",      "Pass Cmp %",       "Distribution",False),
+    ("Pass/90",    "Passes p90",       "Distribution",False),
+    ("Aer%",       "Aerial Win %",     "Duels",       False),
+]
+_GROUP_COLORS = {
+    "Attacking":    "#1a9988",
+    "Passing":      "#d4a91e",
+    "Duels":        "#4a7fe8",
+    "Defence":      "#cc4444",
+    "Goalkeeping":  "#1a9988",
+    "Distribution": "#d4a91e",
+}
+
+
+def _pct_rank(series, val):
+    arr = series.dropna().to_numpy(dtype=float)
+    if len(arr) == 0:
+        return 50.0
+    return float(np.sum(arr <= val) / len(arr) * 100)
+
+
+def player_scouting_report(player_name, full_df):
+    prow = full_df[full_df["Player"] == player_name]
+    if prow.empty:
+        return
+    prow = prow.iloc[0]
+    pos   = prow.get("Pos", "FWD")
+    mins  = prow.get("Mins", 0)
+    team  = prow.get("Team", "")
+
+    stat_defs = _SCOUT_GK if pos == "GK" else _SCOUT_OUTFIELD
+    peers = full_df[(full_df["Pos"] == pos) & (full_df["Mins"] >= 450)].copy()
+
+    rows = []
+    for col, label, group, inv in stat_defs:
+        if col not in full_df.columns:
+            continue
+        val = prow.get(col, np.nan)
+        if pd.isna(val):
+            val = 0.0
+        val = float(val)
+        pct = _pct_rank(peers[col], val)
+        if inv:
+            pct = 100 - pct
+        rows.append({"stat": label, "val": val, "pct": pct, "group": group})
+
+    if not rows:
+        return
+
+    import plotly.graph_objects as go
+
+    st.markdown(f"""
+    <div style="background:#fff;border:1px solid #e4e4e0;border-top:3px solid {RED};
+         border-radius:6px;padding:1.25rem 1.5rem .75rem;margin:1rem 0 .5rem;">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;">
+        Scouting Report · {pos} · {team}</div>
+      <div style="font-size:1.3rem;font-weight:800;color:{NAVY};margin:.1rem 0 .05rem;">{player_name}</div>
+      <div style="font-size:.75rem;color:#888;">{int(mins)} minutes · percentile vs position peers (≥450 min)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_bar, col_pizza = st.columns([1, 1])
+
+    # ── Left: percentile bar table ────────────────────────────────────────────
+    with col_bar:
+        bar_rows = []
+        for r in rows:
+            color = _GROUP_COLORS.get(r["group"], "#888")
+            bar_w  = max(int(r["pct"]), 2)
+            val_fmt = f"{r['val']:.2f}"
+            pct_fmt = f"{int(round(r['pct']))}"
+            bar_rows.append(
+                f'<tr>'
+                f'<td style="text-align:right;padding:3px 8px;font-size:.75rem;color:#555;white-space:nowrap">{r["stat"]}</td>'
+                f'<td style="text-align:right;padding:3px 6px;font-size:.75rem;font-weight:600;color:{NAVY}">{val_fmt}</td>'
+                f'<td style="padding:3px 6px;font-size:.75rem;font-weight:700;color:{NAVY};width:28px;text-align:right">{pct_fmt}</td>'
+                f'<td style="padding:3px 6px;width:140px">'
+                f'<div style="background:#f0f0ec;border-radius:3px;height:10px;">'
+                f'<div style="background:{color};width:{bar_w}%;height:10px;border-radius:3px;"></div>'
+                f'</div></td>'
+                f'</tr>'
+            )
+        st.markdown(
+            f'<table style="width:100%;border-collapse:collapse;">'
+            f'<thead><tr>'
+            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 8px;font-weight:600">STAT</th>'
+            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">VALUE</th>'
+            f'<th style="text-align:right;font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">PCT</th>'
+            f'<th style="font-size:.65rem;color:#aaa;padding:3px 6px;font-weight:600">PERCENTILE</th>'
+            f'</tr></thead>'
+            f'<tbody>{"".join(bar_rows)}</tbody>'
+            f'</table>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Right: pizza chart ────────────────────────────────────────────────────
+    with col_pizza:
+        labels  = [r["stat"] for r in rows]
+        pcts    = [r["pct"]  for r in rows]
+        colors  = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
+        n       = len(labels)
+        step    = 360 / n
+        thetas  = [i * step + step / 2 for i in range(n)]
+
+        # background ring at 100
+        fig = go.Figure()
+        fig.add_trace(go.Barpolar(
+            r=[100] * n, theta=thetas, width=[step * 0.98] * n,
+            marker_color=["#f0f0ec"] * n, marker_line_width=0,
+            hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Barpolar(
+            r=pcts, theta=thetas, width=[step * 0.98] * n,
+            marker_color=colors, marker_line_color="white", marker_line_width=1.5,
+            opacity=0.88, showlegend=False,
+            customdata=[[r["stat"], r["val"], r["pct"]] for r in rows],
+            hovertemplate="<b>%{customdata[0]}</b><br>Value: %{customdata[1]:.2f}<br>Pct: %{customdata[2]:.0f}<extra></extra>",
+        ))
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(visible=False, range=[0, 100]),
+                angularaxis=dict(
+                    tickvals=thetas, ticktext=labels,
+                    direction="clockwise", rotation=90,
+                    tickfont=dict(size=9, color=NAVY),
+                ),
+                bgcolor="white",
+            ),
+            showlegend=False,
+            height=380,
+            margin=dict(l=70, r=70, t=30, b=30),
+            paper_bgcolor="white",
+        )
+
+        # legend
+        seen = {}
+        for r in rows:
+            g = r["group"]
+            if g not in seen:
+                seen[g] = _GROUP_COLORS.get(g, "#888")
+        legend_html = " ".join(
+            f'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:.68rem;color:#555;">'
+            f'<span style="width:10px;height:10px;border-radius:2px;background:{c};display:inline-block;"></span>{g}</span>'
+            for g, c in seen.items()
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown(f'<div style="text-align:center;margin-top:-.5rem;">{legend_html}</div>', unsafe_allow_html=True)
 
 
 def download_buttons(df_dl, label):
@@ -971,13 +1144,17 @@ with tab_sum:
         cols_sum = list(dict.fromkeys(cols_sum))
     df_s = df_s[[c for c in cols_sum if c in df_s.columns]]
     page_df_s = paginate(df_s, "pg_sum")
-    show_table(page_df_s,
+    ev, shown = show_table(page_df_s,
         heat_cols=["Goals","xG","G-xG","Mins","Passes","KP","G/90","xG/90","Sh/90"],
         pal_map={"Goals":"green","xG":"green","G-xG":"blue","Mins":"blue",
                  "Passes":"blue","G/90":"green","xG/90":"green"},
     )
-    st.markdown('<p class="footnote">G-xG = goals minus expected goals (positive = overperforming). KP = key passes.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="footnote">G-xG = goals minus expected goals (positive = overperforming). KP = key passes. Click a row to open scouting report.</p>', unsafe_allow_html=True)
     download_buttons(df_s, "summary")
+    if ev.selection.rows:
+        sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1011,13 +1188,17 @@ with tab_shoot:
     cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
     cols_sh = [c for c in cols_sh if c in sh_sorted.columns]
     sh_page = paginate(sh_sorted[cols_sh], "pg_sh")
-    show_table(sh_page,
+    ev, shown = show_table(sh_page,
         heat_cols=["Goals","xG","Shots","G-xG","BigCh","xG/90","Sh/90","G/90","G/Sh","xG/Sh"],
         pal_map={"Goals":"green","xG":"green","Shots":"blue","G-xG":"blue",
                  "BigCh":"green","xG/90":"green","G/90":"green"},
     )
-    st.markdown('<p class="footnote">Season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. BigCh = big chances.</p>', unsafe_allow_html=True)
-    download_buttons(sh_sorted[cols_sh], "shooting")  # export all rows
+    st.markdown('<p class="footnote">Season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. BigCh = big chances. Click a row to open scouting report.</p>', unsafe_allow_html=True)
+    download_buttons(sh_sorted[cols_sh], "shooting")
+    if ev.selection.rows:
+        sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1029,12 +1210,16 @@ with tab_pass:
     cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","xT","Pass/90","KP/90","xT/90","FoulsWon"]
     cols_pa = [c for c in cols_pa if c in df_pa.columns]
     df_pa = df_pa[cols_pa]
-    show_table(paginate(df_pa, "pg_pa"),
+    ev, shown = show_table(paginate(df_pa, "pg_pa"),
         heat_cols=["Passes","PassCmp","Pass%","KP","xT","Pass/90","KP/90","xT/90"],
         pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","xT":"green","Pass/90":"blue","KP/90":"green","xT/90":"green"},
     )
-    st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes. xT = expected threat generated by passes (Karun Singh 16×12 grid). FoulsWon = fouls drawn.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes. xT = expected threat (Karun Singh 16×12 grid). Click a row to open scouting report.</p>', unsafe_allow_html=True)
     download_buttons(df_pa, "passing")
+    if ev.selection.rows:
+        sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1047,15 +1232,19 @@ with tab_def:
     cols_de = ["Player","Team","Pos","GP","Mins","Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90","FoulsCom","Yellow","Red"]
     cols_de = [c for c in cols_de if c in df_de.columns]
     df_de = df_de[cols_de]
-    show_table(paginate(df_de, "pg_def"),
+    ev, shown = show_table(paginate(df_de, "pg_def"),
         heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90"],
         inv_cols=["FoulsCom","Yellow","Red"],
         pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
                  "Aerials":"blue","Aer%":"green","Tkl/90":"blue","Int/90":"blue"},
         pct_cols=["Tkl%","Aer%"],
     )
-    st.markdown('<p class="footnote">TklWon = tackles won. Tkl% = tackle success rate. Aer% = aerial duel win rate.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="footnote">TklWon = tackles won. Tkl% = tackle success rate. Aer% = aerial duel win rate. Click a row to open scouting report.</p>', unsafe_allow_html=True)
     download_buttons(df_de, "defence")
+    if ev.selection.rows:
+        sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1079,14 +1268,18 @@ with tab_gk:
         cols_gk = ["Player","Team","GP","Starts","Mins","GA","Saves","Save%","CS","GA/90"]
         cols_gk = [c for c in cols_gk if c in df_gk_s.columns]
         df_gk_s = df_gk_s[cols_gk]
-        show_table(paginate(df_gk_s, "pg_gk"),
+        ev, shown = show_table(paginate(df_gk_s, "pg_gk"),
             heat_cols=["Saves","Save%","CS"],
             inv_cols=["GA","GA/90"],
             pal_map={"Saves":"blue","Save%":"green","CS":"green","GA":"red","GA/90":"red"},
             pct_cols=["Save%"],
         )
-        st.markdown('<p class="footnote">Save% = saves/(saves+GA). CS = clean sheets. GA/90 = goals against per 90 min.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="footnote">Save% = saves/(saves+GA). CS = clean sheets. GA/90 = goals against per 90 min. Click a row to open scouting report.</p>', unsafe_allow_html=True)
         download_buttons(df_gk_s, "goalkeeping")
+        if ev.selection.rows:
+            sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+            if sel_player:
+                player_scouting_report(sel_player, player_df)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1099,24 +1292,32 @@ with tab_misc:
     df_disc = sort_df(df, sort_disc)
     cols_disc = ["Player","Team","Pos","GP","Mins","FoulsCom","FoulsWon","Yellow","Red"]
     cols_disc = [c for c in cols_disc if c in df_disc.columns]
-    show_table(paginate(df_disc[cols_disc], "pg_disc"),
+    ev, shown = show_table(paginate(df_disc[cols_disc], "pg_disc"),
         heat_cols=["FoulsCom","Yellow","Red","FoulsWon"],
         inv_cols=["FoulsCom","Yellow","Red"],
         pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green"},
     )
     download_buttons(df_disc[cols_disc], "discipline")
+    if ev.selection.rows:
+        sel_player = shown.iloc[ev.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
     st.markdown('<span class="pill">Dribbles & Aerials</span>', unsafe_allow_html=True)
     df_duel = sort_df(df, sort_duel)
     cols_duel = ["Player","Team","Pos","GP","Mins","Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"]
     cols_duel = [c for c in cols_duel if c in df_duel.columns]
-    show_table(paginate(df_duel[cols_duel], "pg_duel"),
+    ev2, shown2 = show_table(paginate(df_duel[cols_duel], "pg_duel"),
         heat_cols=["Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"],
         pal_map={"Dribbles":"blue","DribWon":"green","Drib%":"green",
                  "Aerials":"blue","AerWon":"green","Aer%":"green"},
         pct_cols=["Drib%","Aer%"],
     )
     download_buttons(df_duel[cols_duel], "duels")
+    if ev2.selection.rows:
+        sel_player = shown2.iloc[ev2.selection.rows[0]].get("Player")
+        if sel_player:
+            player_scouting_report(sel_player, player_df)
 
     st.markdown('<p class="footnote">FoulsCom = fouls committed. FoulsWon = fouls drawn. Drib% = successful take-on rate. Aer% = aerial duel win %.</p>', unsafe_allow_html=True)
 
