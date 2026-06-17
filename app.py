@@ -1119,6 +1119,7 @@ def render_player_profile(player_name, full_df):
             hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:.2f} · %{customdata[2]}th pct<extra></extra>",
         ))
         fig.update_layout(
+            barmode="overlay",
             polar=dict(
                 radialaxis=dict(visible=False, range=[0, 99]),
                 angularaxis=dict(
