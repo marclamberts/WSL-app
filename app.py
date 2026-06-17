@@ -229,6 +229,31 @@ MATCH_MINS  = 90
 POS_MAP  = {"1": "GK", "2": "DEF", "3": "MID", "4": "FWD"}
 POS_ORDER = {"GK": 0, "DEF": 1, "MID": 2, "FWD": 3}
 
+# ── xT grid (Karun Singh 16×12, values as % of pitch 0-100) ──────────────────
+_XT_GRID = np.array([
+    [0.00638,0.00638,0.01370,0.01837,0.01929,0.02089,0.02523,0.02931,0.03241,0.03658,0.04843,0.07826,0.09434,0.11143,0.15227,0.26325],
+    [0.00638,0.00765,0.01370,0.01916,0.02069,0.02247,0.02607,0.03126,0.03469,0.04088,0.05765,0.09020,0.11221,0.13098,0.17399,0.29143],
+    [0.00765,0.00919,0.01621,0.02138,0.02376,0.02614,0.02924,0.03610,0.03978,0.05196,0.07604,0.11781,0.14526,0.17126,0.21693,0.35057],
+    [0.00919,0.01012,0.01821,0.02327,0.02614,0.02910,0.03276,0.04020,0.04513,0.06172,0.09567,0.14730,0.17797,0.21009,0.27201,0.39557],
+    [0.01012,0.01117,0.01996,0.02530,0.02910,0.03276,0.03719,0.04674,0.05478,0.07746,0.12021,0.18052,0.22136,0.26325,0.34022,0.46135],
+    [0.01117,0.01258,0.02138,0.02716,0.03126,0.03586,0.04238,0.05530,0.06747,0.09766,0.15096,0.22067,0.27130,0.32372,0.41847,0.54435],
+    [0.01117,0.01258,0.02138,0.02716,0.03126,0.03586,0.04238,0.05530,0.06747,0.09766,0.15096,0.22067,0.27130,0.32372,0.41847,0.54435],
+    [0.01012,0.01117,0.01996,0.02530,0.02910,0.03276,0.03719,0.04674,0.05478,0.07746,0.12021,0.18052,0.22136,0.26325,0.34022,0.46135],
+    [0.00919,0.01012,0.01821,0.02327,0.02614,0.02910,0.03276,0.04020,0.04513,0.06172,0.09567,0.14730,0.17797,0.21009,0.27201,0.39557],
+    [0.00765,0.00919,0.01621,0.02138,0.02376,0.02614,0.02924,0.03610,0.03978,0.05196,0.07604,0.11781,0.14526,0.17126,0.21693,0.35057],
+    [0.00638,0.00765,0.01370,0.01916,0.02069,0.02247,0.02607,0.03126,0.03469,0.04088,0.05765,0.09020,0.11221,0.13098,0.17399,0.29143],
+    [0.00638,0.00638,0.01370,0.01837,0.01929,0.02089,0.02523,0.02931,0.03241,0.03658,0.04843,0.07826,0.09434,0.11143,0.15227,0.26325],
+], dtype=float)  # shape (12, 16)
+
+def _xt_value(x, y):
+    """Look up xT for a position (x, y as 0-100 % of pitch, x=0 own goal)."""
+    try:
+        col = int(np.clip(float(x) / 100 * 16, 0, 15))
+        row = int(np.clip(float(y) / 100 * 12, 0, 11))
+        return float(_XT_GRID[row, col])
+    except Exception:
+        return 0.0
+
 # Opta event type IDs
 T_PASS        = 1
 T_OFFSIDE_P   = 2
@@ -378,7 +403,7 @@ def parse_all_matches():
             qs = {q["qualifierId"]: q.get("value","") for q in qs_list}
 
             s = stats.setdefault(pid, {
-                "passes":0,"passes_cmp":0,"key_passes":0,
+                "passes":0,"passes_cmp":0,"key_passes":0,"xT":0.0,
                 "shots":0,"goals":0,"saves":0,
                 "tackles":0,"tackles_won":0,
                 "interceptions":0,"clearances":0,
@@ -396,6 +421,17 @@ def parse_all_matches():
                 # key pass: qualifier 210 or 55 with specific value
                 if 210 in qs or 211 in qs:
                     s["key_passes"] += 1
+                # xT: end coords from qualifiers 140/141, start from event x/y
+                x0 = e.get("x", None)
+                y0 = e.get("y", None)
+                x1 = qs.get(140, None)
+                y1 = qs.get(141, None)
+                if x0 is not None and y0 is not None and x1 is not None and y1 is not None:
+                    try:
+                        xt_gain = _xt_value(x1, y1) - _xt_value(x0, y0)
+                        s["xT"] += max(xt_gain, 0.0)  # only credit positive threat
+                    except Exception:
+                        pass
             elif tid == T_TACKLE:
                 s["tackles"] += 1
                 if outcome == 1:
@@ -467,6 +503,7 @@ def parse_all_matches():
                 "Passes":   s.get("passes", 0),
                 "PassCmp":  s.get("passes_cmp", 0),
                 "KP":       s.get("key_passes", 0),
+                "xT":       round(s.get("xT", 0.0), 4),
                 "Tackles":  s.get("tackles", 0),
                 "TklWon":   s.get("tackles_won", 0),
                 "Inter":    s.get("interceptions", 0),
@@ -522,6 +559,7 @@ def build_player_summary(match_df, xg_df):
         Passes   =("Passes","sum"),
         PassCmp  =("PassCmp","sum"),
         KP       =("KP","sum"),
+        xT       =("xT","sum"),
         Tackles  =("Tackles","sum"),
         TklWon   =("TklWon","sum"),
         Inter    =("Inter","sum"),
@@ -559,9 +597,11 @@ def build_player_summary(match_df, xg_df):
     grp["xG/90"]   = (grp["xG"]   / m90).round(2)
     grp["Sh/90"]   = (grp["Shots"] / m90).round(2)
     grp["KP/90"]   = (grp["KP"]   / m90).round(2)
+    grp["xT/90"]   = (grp["xT"]   / m90).round(2)
     grp["Tkl/90"]  = (grp["Tackles"] / m90).round(2)
     grp["Int/90"]  = (grp["Inter"]   / m90).round(2)
     grp["Pass/90"] = (grp["Passes"]  / m90).round(2)
+    grp["xT"]      = grp["xT"].round(2)
 
     grp["Pass%"]   = (grp["PassCmp"] / grp["Passes"].replace(0,np.nan) * 100).round(1)
     grp["Tkl%"]    = (grp["TklWon"]  / grp["Tackles"].replace(0,np.nan) * 100).round(1)
@@ -714,7 +754,7 @@ with st.sidebar:
     st.markdown("### Sort")
     sort_sum   = st.selectbox("Summary",    ["Goals","xG","Mins","GP","Shots","Passes","Tackles","KP"], key="ss")
     sort_sh    = st.selectbox("Shooting",   ["xG","Goals","Shots","G-xG","xG/90","Sh/90","G/90","G/Sh","xG/Sh","BigCh","Mins"], key="ssh")
-    sort_pa    = st.selectbox("Passing",    ["Passes","Pass%","KP","Pass/90","KP/90"], key="spa")
+    sort_pa    = st.selectbox("Passing",    ["xT","Passes","Pass%","KP","xT/90","Pass/90","KP/90"], key="spa")
     sort_de    = st.selectbox("Defence",    ["Tackles","TklWon","Inter","Clears","Tkl%","Tkl/90","Int/90","Aerials","Aer%"], key="sde")
     sort_gk    = st.selectbox("GK",         ["Saves","Save%","GA","CS","Mins","GA/90"], key="sgk")
     sort_disc  = st.selectbox("Discipline", ["Yellow","Red","FoulsCom","FoulsWon"], key="sdisc")
@@ -986,14 +1026,14 @@ with tab_shoot:
 with tab_pass:
     st.markdown('<span class="pill">Passing Statistics</span>', unsafe_allow_html=True)
     df_pa = sort_df(df[df["Passes"] > 0], sort_pa)
-    cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","Pass/90","KP/90","FoulsWon"]
+    cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","xT","Pass/90","KP/90","xT/90","FoulsWon"]
     cols_pa = [c for c in cols_pa if c in df_pa.columns]
     df_pa = df_pa[cols_pa]
     show_table(paginate(df_pa, "pg_pa"),
-        heat_cols=["Passes","PassCmp","Pass%","KP","Pass/90","KP/90"],
-        pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","Pass/90":"blue","KP/90":"green"},
+        heat_cols=["Passes","PassCmp","Pass%","KP","xT","Pass/90","KP/90","xT/90"],
+        pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","xT":"green","Pass/90":"blue","KP/90":"green","xT/90":"green"},
     )
-    st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes. FoulsWon = fouls drawn.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="footnote">PassCmp = completed passes. Pass% = completion rate. KP = key passes. xT = expected threat generated by passes (Karun Singh 16×12 grid). FoulsWon = fouls drawn.</p>', unsafe_allow_html=True)
     download_buttons(df_pa, "passing")
 
 
