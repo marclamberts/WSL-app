@@ -50,41 +50,41 @@ st.markdown(f"""
 
   /* ── Sidebar ── */
   [data-testid="stSidebar"] {{
-    background: {NAVY} !important;
-    border-right: none !important;
-    box-shadow: 2px 0 12px rgba(0,0,0,.15);
+    background: #ffffff !important;
+    border-right: 1px solid #e4e4e0 !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,.04);
   }}
   [data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
-  [data-testid="stSidebar"] * {{ color: #c8d8e8 !important; }}
-  [data-testid="stSidebar"] hr {{ border-color: #1e3248 !important; margin: .75rem 0; }}
+  [data-testid="stSidebar"] * {{ color: {NAVY} !important; }}
+  [data-testid="stSidebar"] hr {{ border-color: #ebebeb !important; margin: .75rem 0; }}
 
   /* Sidebar section header */
   [data-testid="stSidebar"] h3 {{
-    color: #ffffff !important;
-    font-size: .8rem !important;
+    color: #888 !important;
+    font-size: .68rem !important;
     font-weight: 700 !important;
-    letter-spacing: 1.2px !important;
+    letter-spacing: 1.4px !important;
     text-transform: uppercase !important;
-    margin: 1.2rem 0 .5rem !important;
+    margin: 1.1rem 0 .4rem !important;
   }}
 
   /* Sidebar widget labels */
   [data-testid="stSidebar"] label,
   [data-testid="stSidebar"] .stSlider label {{
-    color: #8aafc8 !important;
+    color: #666 !important;
     font-size: .72rem !important;
     font-weight: 600 !important;
     text-transform: uppercase !important;
     letter-spacing: .8px !important;
   }}
 
-  /* Sidebar multiselect + selectbox */
+  /* Sidebar multiselect + selectbox inputs */
   [data-testid="stSidebar"] [data-testid="stMultiSelect"] > div > div,
   [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {{
-    background: #152535 !important;
-    border: 1px solid #1e3248 !important;
+    background: #f9f9f7 !important;
+    border: 1.5px solid #e0e0da !important;
     border-radius: 6px !important;
-    color: #e0eaf4 !important;
+    color: {NAVY} !important;
   }}
   [data-testid="stSidebar"] [data-baseweb="tag"] {{
     background: {RED} !important;
@@ -92,25 +92,21 @@ st.markdown(f"""
   }}
   [data-testid="stSidebar"] [data-baseweb="tag"] span {{ color: #fff !important; }}
 
-  /* Sidebar slider */
+  /* Sidebar slider track */
   [data-testid="stSidebar"] [data-testid="stSlider"] [role="slider"] {{
     background: {RED} !important;
-  }}
-  [data-testid="stSidebar"] [data-testid="stSlider"] div[data-testid] > div > div:nth-child(2) {{
-    background: {RED} !important;
+    border-color: {RED} !important;
   }}
 
   /* Sidebar toggle */
-  [data-testid="stSidebar"] [data-testid="stToggle"] {{
-    accent-color: {RED};
-  }}
   [data-testid="stSidebar"] [role="switch"][aria-checked="true"] {{
     background-color: {RED} !important;
   }}
+
   [data-testid="stSidebar"] .stCaption p {{
-    color: #4a6882 !important;
+    color: #aaa !important;
     font-size: .68rem !important;
-    line-height: 1.5;
+    line-height: 1.6;
   }}
 
   /* ── Page header band ── */
@@ -635,9 +631,9 @@ ALL_POS   = ["GK","DEF","MID","FWD"]
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(f"""
-    <div style="background:{RED};margin:-1rem -1rem 0 -1rem;padding:1rem 1.25rem .9rem;">
-      <div style="font-size:.62rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:.2rem;">Barclays WSL 2025/26</div>
-      <div style="font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:-.3px;">⚽ Stats Hub</div>
+    <div style="background:{NAVY};margin:-1rem -1rem 0 -1rem;padding:1rem 1.25rem .9rem;border-bottom:3px solid {RED};">
+      <div style="font-size:.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:.2rem;">Barclays WSL 2025/26</div>
+      <div style="font-size:1.05rem;font-weight:800;color:#fff;letter-spacing:-.3px;">⚽ Stats Hub</div>
     </div>
     """, unsafe_allow_html=True)
 
