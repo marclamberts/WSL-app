@@ -708,7 +708,7 @@ with st.sidebar:
     st.markdown("### Display")
     per90_mode = st.toggle("Per-90 mode", value=False,
                            help="Show rate stats per 90 minutes instead of totals")
-    show_n = st.slider("Rows to show", 10, 100, 30, step=10)
+    page_size = st.selectbox("Rows per page", [25, 50, 100], index=1)
 
     st.markdown("---")
     st.markdown("### Sort")
@@ -817,10 +817,41 @@ def download_buttons(df_dl, label):
                          use_container_width=True)
 
 
-def top_n(df_in, sort_col, n, ascending=False):
+def sort_df(df_in, sort_col, ascending=False):
     if sort_col not in df_in.columns:
-        return df_in.head(n)
-    return df_in.sort_values(sort_col, ascending=ascending).head(n).reset_index(drop=True)
+        return df_in.reset_index(drop=True)
+    return df_in.sort_values(sort_col, ascending=ascending).reset_index(drop=True)
+
+
+def paginate(df_in, key):
+    """Slice df_in for the current page and render << < Page X/Y > >> controls."""
+    n        = len(df_in)
+    n_pages  = max(1, (n + page_size - 1) // page_size)
+    if key not in st.session_state:
+        st.session_state[key] = 0
+    # clamp in case data size changed
+    st.session_state[key] = max(0, min(st.session_state[key], n_pages - 1))
+    page  = st.session_state[key]
+    start = page * page_size
+    end   = min(start + page_size, n)
+
+    # nav bar
+    b1, b2, b_lbl, b3, b4 = st.columns([1, 1, 6, 1, 1])
+    if b1.button("⏮", key=f"{key}_first", use_container_width=True, disabled=(page == 0)):
+        st.session_state[key] = 0; st.rerun()
+    if b2.button("◀", key=f"{key}_prev",  use_container_width=True, disabled=(page == 0)):
+        st.session_state[key] = page - 1; st.rerun()
+    b_lbl.markdown(
+        f'<p style="text-align:center;margin:0;padding:.45rem 0;font-size:.78rem;color:#888;">'
+        f'Page <strong>{page+1}</strong> of {n_pages} &nbsp;·&nbsp; {n} rows</p>',
+        unsafe_allow_html=True,
+    )
+    if b3.button("▶", key=f"{key}_next",  use_container_width=True, disabled=(page == n_pages - 1)):
+        st.session_state[key] = page + 1; st.rerun()
+    if b4.button("⏭", key=f"{key}_last",  use_container_width=True, disabled=(page == n_pages - 1)):
+        st.session_state[key] = n_pages - 1; st.rerun()
+
+    return df_in.iloc[start:end].reset_index(drop=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -883,7 +914,7 @@ tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc, tab_teams = st.tabs([
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_sum:
     st.markdown('<span class="pill">Player Summary</span>', unsafe_allow_html=True)
-    df_s = top_n(df, sort_sum, show_n)
+    df_s = sort_df(df, sort_sum)
     cols_sum = ["Player","Team","Pos","GP","Starts","Mins","Goals","xG","G-xG","Shots","Passes","Pass%","KP","Tackles","Yellow","Red"]
     cols_sum = [c for c in cols_sum if c in df_s.columns]
     if per90_mode:
@@ -892,7 +923,8 @@ with tab_sum:
                 cols_sum = [r if x==c else x for x in cols_sum]
         cols_sum = list(dict.fromkeys(cols_sum))
     df_s = df_s[[c for c in cols_sum if c in df_s.columns]]
-    show_table(df_s,
+    page_df_s = paginate(df_s, "pg_sum")
+    show_table(page_df_s,
         heat_cols=["Goals","xG","G-xG","Mins","Passes","KP","G/90","xG/90","Sh/90"],
         pal_map={"Goals":"green","xG":"green","G-xG":"blue","Mins":"blue",
                  "Passes":"blue","G/90":"green","xG/90":"green"},
@@ -928,16 +960,17 @@ with tab_shoot:
     sh_agg["BigCh"] = sh_agg["BigCh"].fillna(0).astype(int) if "BigCh" in sh_agg.columns else 0
     sh_agg = sh_agg[sh_agg["Mins"] >= min_mins]
 
-    sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).head(show_n).reset_index(drop=True)
+    sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).reset_index(drop=True)
     cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
     cols_sh = [c for c in cols_sh if c in sh_sorted.columns]
-    show_table(sh_sorted[cols_sh],
+    sh_page = paginate(sh_sorted[cols_sh], "pg_sh")
+    show_table(sh_page,
         heat_cols=["Goals","xG","Shots","G-xG","BigCh","xG/90","Sh/90","G/90","G/Sh","xG/Sh"],
         pal_map={"Goals":"green","xG":"green","Shots":"blue","G-xG":"blue",
                  "BigCh":"green","xG/90":"green","G/90":"green"},
     )
     st.markdown('<p class="footnote">Season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. BigCh = big chances.</p>', unsafe_allow_html=True)
-    download_buttons(sh_sorted[cols_sh], "shooting")
+    download_buttons(sh_sorted[cols_sh], "shooting")  # export all rows
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -945,11 +978,11 @@ with tab_shoot:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_pass:
     st.markdown('<span class="pill">Passing Statistics</span>', unsafe_allow_html=True)
-    df_pa = top_n(df[df["Passes"] > 0], sort_pa, show_n)
+    df_pa = sort_df(df[df["Passes"] > 0], sort_pa)
     cols_pa = ["Player","Team","Pos","GP","Mins","Passes","PassCmp","Pass%","KP","Pass/90","KP/90","FoulsWon"]
     cols_pa = [c for c in cols_pa if c in df_pa.columns]
     df_pa = df_pa[cols_pa]
-    show_table(df_pa,
+    show_table(paginate(df_pa, "pg_pa"),
         heat_cols=["Passes","PassCmp","Pass%","KP","Pass/90","KP/90"],
         pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","Pass/90":"blue","KP/90":"green"},
     )
@@ -963,11 +996,11 @@ with tab_pass:
 with tab_def:
     st.markdown('<span class="pill">Defensive Statistics</span>', unsafe_allow_html=True)
     df_def_base = df[df["Pos"].isin(["DEF","MID","FWD","GK"])]
-    df_de = top_n(df_def_base, sort_de, show_n)
+    df_de = sort_df(df_def_base, sort_de)
     cols_de = ["Player","Team","Pos","GP","Mins","Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90","FoulsCom","Yellow","Red"]
     cols_de = [c for c in cols_de if c in df_de.columns]
     df_de = df_de[cols_de]
-    show_table(df_de,
+    show_table(paginate(df_de, "pg_def"),
         heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%","Tkl/90","Int/90"],
         inv_cols=["FoulsCom","Yellow","Red"],
         pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
@@ -995,11 +1028,11 @@ with tab_gk:
         df_gk_m["GA/90"] = (df_gk_m["GA"] / (df_gk_m["Mins"] / 90).replace(0, np.nan)).round(2)
 
         asc_gk  = sort_gk in ("GA","GA/90")
-        df_gk_s = df_gk_m.sort_values(sort_gk, ascending=asc_gk).head(show_n).reset_index(drop=True)
+        df_gk_s = df_gk_m.sort_values(sort_gk, ascending=asc_gk).reset_index(drop=True)
         cols_gk = ["Player","Team","GP","Starts","Mins","GA","Saves","Save%","CS","GA/90"]
         cols_gk = [c for c in cols_gk if c in df_gk_s.columns]
         df_gk_s = df_gk_s[cols_gk]
-        show_table(df_gk_s,
+        show_table(paginate(df_gk_s, "pg_gk"),
             heat_cols=["Saves","Save%","CS"],
             inv_cols=["GA","GA/90"],
             pal_map={"Saves":"blue","Save%":"green","CS":"green","GA":"red","GA/90":"red"},
@@ -1016,10 +1049,10 @@ with tab_misc:
     st.markdown('<span class="pill">Discipline & Duels</span>', unsafe_allow_html=True)
 
     st.markdown('<span class="pill">Discipline</span>', unsafe_allow_html=True)
-    df_disc = top_n(df, sort_disc, show_n)
+    df_disc = sort_df(df, sort_disc)
     cols_disc = ["Player","Team","Pos","GP","Mins","FoulsCom","FoulsWon","Yellow","Red"]
     cols_disc = [c for c in cols_disc if c in df_disc.columns]
-    show_table(df_disc[cols_disc],
+    show_table(paginate(df_disc[cols_disc], "pg_disc"),
         heat_cols=["FoulsCom","Yellow","Red","FoulsWon"],
         inv_cols=["FoulsCom","Yellow","Red"],
         pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green"},
@@ -1027,10 +1060,10 @@ with tab_misc:
     download_buttons(df_disc[cols_disc], "discipline")
 
     st.markdown('<span class="pill">Dribbles & Aerials</span>', unsafe_allow_html=True)
-    df_duel = top_n(df, sort_duel, show_n)
+    df_duel = sort_df(df, sort_duel)
     cols_duel = ["Player","Team","Pos","GP","Mins","Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"]
     cols_duel = [c for c in cols_duel if c in df_duel.columns]
-    show_table(df_duel[cols_duel],
+    show_table(paginate(df_duel[cols_duel], "pg_duel"),
         heat_cols=["Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"],
         pal_map={"Dribbles":"blue","DribWon":"green","Drib%":"green",
                  "Aerials":"blue","AerWon":"green","Aer%":"green"},
