@@ -616,12 +616,106 @@ def build_player_summary(match_df, xg_df):
     return grp.reset_index(drop=True)
 
 
+@st.cache_data
+def build_team_agg(match_df, xg_df):
+    """Squad-level aggregated stats from player match rows."""
+    if match_df.empty:
+        return pd.DataFrame()
+
+    # one row per team per match, then aggregate
+    tm = match_df.groupby(["Team","Match"]).agg(
+        Goals    =("Goals","sum"),
+        Shots    =("Shots","sum"),
+        Passes   =("Passes","sum"),
+        PassCmp  =("PassCmp","sum"),
+        KP       =("KP","sum"),
+        Tackles  =("Tackles","sum"),
+        TklWon   =("TklWon","sum"),
+        Inter    =("Inter","sum"),
+        Clears   =("Clears","sum"),
+        Dribbles =("Dribbles","sum"),
+        DribWon  =("DribWon","sum"),
+        FoulsCom =("FoulsCom","sum"),
+        FoulsWon =("FoulsWon","sum"),
+        Yellow   =("Yellow","sum"),
+        Red      =("Red","sum"),
+        Aerials  =("Aerials","sum"),
+        AerWon   =("AerWon","sum"),
+        Saves    =("Saves","sum"),
+        GA       =("GA","sum"),
+    ).reset_index()
+
+    # season totals
+    grp = tm.groupby("Team").agg(
+        GP       =("Match","count"),
+        Goals    =("Goals","sum"),
+        Shots    =("Shots","sum"),
+        Passes   =("Passes","sum"),
+        PassCmp  =("PassCmp","sum"),
+        KP       =("KP","sum"),
+        Tackles  =("Tackles","sum"),
+        TklWon   =("TklWon","sum"),
+        Inter    =("Inter","sum"),
+        Clears   =("Clears","sum"),
+        Dribbles =("Dribbles","sum"),
+        DribWon  =("DribWon","sum"),
+        FoulsCom =("FoulsCom","sum"),
+        FoulsWon =("FoulsWon","sum"),
+        Yellow   =("Yellow","sum"),
+        Red      =("Red","sum"),
+        Aerials  =("Aerials","sum"),
+        AerWon   =("AerWon","sum"),
+        Saves    =("Saves","sum"),
+        GA       =("GA","sum"),
+    ).reset_index()
+
+    # xG from CSV
+    if not xg_df.empty:
+        xg_for = xg_df.groupby("HomeTeam").agg(xG_h=("xG","sum")).reset_index().rename(columns={"HomeTeam":"Team"})
+        xg_aw  = xg_df.groupby("AwayTeam").agg(xG_a=("xG","sum")).reset_index().rename(columns={"AwayTeam":"Team"})
+        xg_t   = xg_for.merge(xg_aw, on="Team", how="outer").fillna(0)
+        xg_t["xG"] = (xg_t["xG_h"] + xg_t["xG_a"]).round(1)
+        grp = grp.merge(xg_t[["Team","xG"]], on="Team", how="left")
+        # xGA = opponent xG
+        opp_xg = xg_df.groupby("HomeTeam")["xG"].sum().reset_index().rename(columns={"HomeTeam":"Team","xG":"xGA_h"})
+        opp_xg2= xg_df.groupby("AwayTeam")["xG"].sum().reset_index().rename(columns={"AwayTeam":"Team","xG":"xGA_a"})
+        # For xGA, home team concedes away xG and vice versa
+        xga_home = xg_df.groupby("AwayTeam")["xG"].sum().reset_index().rename(columns={"AwayTeam":"Team","xG":"xGA"})
+        xga_away = xg_df.groupby("HomeTeam")["xG"].sum().reset_index().rename(columns={"HomeTeam":"Team","xG":"xGA2"})
+        xga_t   = xga_home.merge(xga_away, on="Team", how="outer").fillna(0)
+        xga_t["xGA"] = (xga_t["xGA"] + xga_t["xGA2"]).round(1)
+        grp = grp.merge(xga_t[["Team","xGA"]], on="Team", how="left")
+    else:
+        grp["xG"] = np.nan
+        grp["xGA"] = np.nan
+
+    grp["xG"]  = grp["xG"].fillna(0)
+    grp["xGA"] = grp["xGA"].fillna(0)
+    grp["xGD"] = (grp["xG"] - grp["xGA"]).round(1)
+    grp["G-xG"]= (grp["Goals"] - grp["xG"]).round(1)
+
+    # per-game averages
+    gp = grp["GP"].replace(0, np.nan)
+    for col in ["Goals","Shots","Passes","KP","Tackles","Inter","Clears","Dribbles","Aerials","xG","xGA"]:
+        if col in grp.columns:
+            grp[f"{col}/G"] = (grp[col] / gp).round(2)
+
+    grp["Pass%"] = (grp["PassCmp"] / grp["Passes"].replace(0,np.nan) * 100).round(1)
+    grp["Tkl%"]  = (grp["TklWon"]  / grp["Tackles"].replace(0,np.nan) * 100).round(1)
+    grp["Drib%"] = (grp["DribWon"] / grp["Dribbles"].replace(0,np.nan) * 100).round(1)
+    grp["Aer%"]  = (grp["AerWon"]  / grp["Aerials"].replace(0,np.nan) * 100).round(1)
+    grp["Save%"] = (grp["Saves"]   / (grp["Saves"]+grp["GA"]).replace(0,np.nan) * 100).round(1)
+
+    return grp.sort_values("Goals", ascending=False).reset_index(drop=True)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # LOAD DATA
 # ─────────────────────────────────────────────────────────────────────────────
-match_df = parse_all_matches()
-xg_df    = load_xg()
+match_df  = parse_all_matches()
+xg_df     = load_xg()
 player_df = build_player_summary(match_df, xg_df)
+team_agg  = build_team_agg(match_df, xg_df)
 
 ALL_TEAMS = sorted(player_df["Team"].dropna().unique()) if not player_df.empty else []
 ALL_POS   = ["GK","DEF","MID","FWD"]
@@ -822,8 +916,8 @@ if not df.empty:
 # ─────────────────────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────────────────────
-tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc = st.tabs([
-    "📊  Summary", "⚽  Shooting", "🎯  Passing", "🛡  Defence", "🧤  Goalkeeping", "🃏  Discipline & Duels"
+tab_sum, tab_shoot, tab_pass, tab_def, tab_gk, tab_misc, tab_teams = st.tabs([
+    "📊  Summary", "⚽  Shooting", "🎯  Passing", "🛡  Defence", "🧤  Goalkeeping", "🃏  Discipline & Duels", "🏟  Teams"
 ])
 
 
@@ -1002,3 +1096,81 @@ with tab_misc:
         download_buttons(df_duel[cols_duel], "duels")
 
     st.markdown('<p class="footnote">FoulsCom = fouls committed. FoulsWon = fouls drawn. Drib% = successful take-on rate. Aer% = aerial duel win %.</p>', unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 7 — TEAMS (aggregated squad stats)
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_teams:
+    if team_agg.empty:
+        st.info("No team data available.")
+    else:
+        ta = team_agg.copy()
+        if sel_teams:
+            ta = ta[ta["Team"].isin(sel_teams)]
+
+        # ── Attacking ─────────────────────────────────────────────────────
+        st.markdown('<span class="pill">Attacking</span>', unsafe_allow_html=True)
+        sort_ta = st.selectbox("Sort by", ["Goals","xG","Shots","KP","G-xG","Goals/G","xG/G","Shots/G"], key="sta")
+        asc_ta  = False
+        ta_atk  = ta.sort_values(sort_ta, ascending=asc_ta).reset_index(drop=True)
+        ta_atk.insert(0, "Rank", ta_atk.index + 1)
+        cols_atk = ["Rank","Team","GP","Goals","Shots","xG","xGD","G-xG","KP","Goals/G","xG/G","Shots/G"]
+        cols_atk = [c for c in cols_atk if c in ta_atk.columns]
+        render_table(ta_atk[cols_atk],
+            heat_cols=["Goals","Shots","xG","xGD","G-xG","Goals/G","xG/G"],
+            pal_map={"Goals":"green","Shots":"blue","xG":"green","xGD":"blue","G-xG":"green","Goals/G":"green","xG/G":"green"},
+            left_cols=["Team"],
+        )
+        download_buttons(ta_atk[cols_atk], "teams_attacking")
+
+        # ── Passing ───────────────────────────────────────────────────────
+        st.markdown('<span class="pill">Passing</span>', unsafe_allow_html=True)
+        sort_tp = st.selectbox("Sort by", ["Passes","Pass%","KP","Passes/G","KP/G"], key="stp")
+        ta_pass = ta.sort_values(sort_tp, ascending=False).reset_index(drop=True)
+        ta_pass.insert(0, "Rank", ta_pass.index + 1)
+        cols_pass = ["Rank","Team","GP","Passes","PassCmp","Pass%","KP","Passes/G","KP/G"]
+        cols_pass = [c for c in cols_pass if c in ta_pass.columns]
+        render_table(ta_pass[cols_pass],
+            heat_cols=["Passes","PassCmp","Pass%","KP","Passes/G"],
+            pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green","Passes/G":"blue"},
+            left_cols=["Team"],
+            pct_cols=["Pass%"],
+        )
+        download_buttons(ta_pass[cols_pass], "teams_passing")
+
+        # ── Defensive ─────────────────────────────────────────────────────
+        st.markdown('<span class="pill">Defensive</span>', unsafe_allow_html=True)
+        sort_td = st.selectbox("Sort by", ["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","Aer%","GA","Save%","xGA"], key="std")
+        asc_td  = sort_td in ("GA","xGA")
+        ta_def  = ta.sort_values(sort_td, ascending=asc_td).reset_index(drop=True)
+        ta_def.insert(0, "Rank", ta_def.index + 1)
+        cols_def = ["Rank","Team","GP","GA","xGA","Save%","Tackles","TklWon","Tkl%","Inter","Clears","Aerials","Aer%"]
+        cols_def = [c for c in cols_def if c in ta_def.columns]
+        render_table(ta_def[cols_def],
+            heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aer%","Save%"],
+            inv_cols=["GA","xGA"],
+            pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue",
+                     "Clears":"blue","Aer%":"green","Save%":"green","GA":"red","xGA":"red"},
+            left_cols=["Team"],
+            pct_cols=["Tkl%","Aer%","Save%"],
+        )
+        download_buttons(ta_def[cols_def], "teams_defensive")
+
+        # ── Discipline ────────────────────────────────────────────────────
+        st.markdown('<span class="pill">Discipline</span>', unsafe_allow_html=True)
+        sort_tdisc = st.selectbox("Sort by", ["Yellow","Red","FoulsCom","FoulsWon"], key="stdisc")
+        ta_disc = ta.sort_values(sort_tdisc, ascending=False).reset_index(drop=True)
+        ta_disc.insert(0, "Rank", ta_disc.index + 1)
+        cols_disc = ["Rank","Team","GP","FoulsCom","FoulsWon","Yellow","Red","Dribbles","DribWon","Drib%"]
+        cols_disc = [c for c in cols_disc if c in ta_disc.columns]
+        render_table(ta_disc[cols_disc],
+            heat_cols=["FoulsCom","Yellow","Red","FoulsWon","Dribbles","Drib%"],
+            inv_cols=["FoulsCom","Yellow","Red"],
+            pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green","Dribbles":"blue","Drib%":"green"},
+            left_cols=["Team"],
+            pct_cols=["Drib%"],
+        )
+        download_buttons(ta_disc[cols_disc], "teams_discipline")
+
+        st.markdown('<p class="footnote">All stats are season totals. /G = per match average. xGD = xG differential (for minus against).</p>', unsafe_allow_html=True)
