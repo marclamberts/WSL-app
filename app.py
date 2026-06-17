@@ -840,6 +840,36 @@ def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
         if c in df_show.columns:
             col_cfg[c] = st.column_config.NumberColumn(c, format="%.1f %%")
 
+    # Make Player names clickable links opening profile in a new tab
+    df_render = df_show.copy()
+    if "Player" in df_render.columns:
+        import urllib.parse
+        df_render.insert(
+            list(df_render.columns).index("Player"),
+            "Profile",
+            df_render["Player"].apply(
+                lambda n: f"/?player={urllib.parse.quote(str(n))}" if pd.notna(n) else ""
+            ),
+        )
+        col_cfg["Profile"] = st.column_config.LinkColumn(
+            "Player", display_text=r".*player=(.+)", help="Open player profile in new tab"
+        )
+        styler = df_render.style.hide(axis="index").format(
+            {c: "{:.2f}" for c in df_render.select_dtypes(include="float").columns},
+            na_rep="—",
+        )
+        # reapply heat maps on the new df
+        for col in heat_cols:
+            if col not in df_render.columns:
+                continue
+            pal  = pal_map.get(col, "blue")
+            base = {"green": "Greens", "red": "Reds", "blue": "Blues"}.get(pal, "Blues")
+            cmap = (base + "_r") if col in inv_cols else base
+            try:
+                styler = styler.background_gradient(subset=[col], cmap=cmap, axis=0)
+            except Exception:
+                pass
+
     row_h = 35
     header_h = 38
     event = st.dataframe(
@@ -1169,6 +1199,12 @@ def paginate(df_in, key):
 
     return df_in.iloc[start:end].reset_index(drop=True)
 
+
+# ── Player profile page — opened via ?player=Name link in a new browser tab ──
+_qp_player = st.query_params.get("player")
+if _qp_player:
+    render_player_profile(_qp_player, player_df)
+    st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HEADER
