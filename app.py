@@ -619,6 +619,36 @@ def build_player_summary(match_df, xg_df):
     grp["G-xG"]    = (grp["Goals"]   - grp["xG"]).round(2)
     grp["SoT"]     = np.nan
 
+    # ── Advanced metrics ──────────────────────────────────────────────────────
+    # Goals Added (g+): shooting over/underperformance + threat created + defending
+    grp["GAdded"] = (
+        (grp["Goals"] - grp["xG"]) +
+        (grp["xT"]    * 0.25) +
+        ((grp["TklWon"] + grp["Inter"]) * 0.05)
+    ).round(2)
+
+    # VAEP (simplified): total action value offensive + defensive per 90
+    vaep_raw = grp["xG"] + grp["xT"] + (grp["TklWon"] + grp["Inter"]) * 0.05
+    grp["VAEP"]    = vaep_raw.round(2)
+    grp["VAEP/90"] = (vaep_raw / m90).round(2)
+
+    # EPV: Expected Possession Value added (xT-based)
+    grp["EPV/90"]  = grp["xT/90"].round(2)
+
+    # WAR: wins above replacement within position group
+    # replacement = 20th-percentile VAEP/90 in position, scaled by minutes played
+    # ~1.5 VAEP units per win (league calibration approximation)
+    grp["WAR"] = np.nan
+    for pos_grp in grp["Pos"].dropna().unique():
+        mask = (grp["Pos"] == pos_grp) & (grp["Mins"] >= 450) & (grp["Pos"] != "SUB")
+        if mask.sum() < 3:
+            continue
+        repl = grp.loc[mask, "VAEP/90"].quantile(0.20)
+        grp.loc[grp["Pos"] == pos_grp, "WAR"] = (
+            (grp.loc[grp["Pos"] == pos_grp, "VAEP/90"] - repl) *
+            (grp.loc[grp["Pos"] == pos_grp, "Mins"] / 90) / 1.5
+        ).round(2)
+
     grp = grp.sort_values(["Pos","Mins"], key=lambda s: s.map(POS_ORDER) if s.name=="Pos" else s, ascending=[True,False])
     return grp.reset_index(drop=True)
 
@@ -888,6 +918,10 @@ def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
 # ── Scouting report stat definitions ─────────────────────────────────────────
 _SCOUT_OUTFIELD = [
     # (col,        label,              group,        lower_is_better)
+    ("GAdded",     "Goals Added",      "Advanced",   False),
+    ("WAR",        "WAR",              "Advanced",   False),
+    ("VAEP/90",    "VAEP p90",         "Advanced",   False),
+    ("EPV/90",     "EPV p90",          "Advanced",   False),
     ("G/90",       "Goals p90",        "Attacking",  False),
     ("xG/90",      "xG p90",           "Attacking",  False),
     ("Sh/90",      "Shots p90",        "Attacking",  False),
@@ -903,6 +937,8 @@ _SCOUT_OUTFIELD = [
     ("Tkl%",       "Tackle Win %",     "Defence",    False),
 ]
 _SCOUT_GK = [
+    ("GAdded",     "Goals Added",      "Advanced",   False),
+    ("WAR",        "WAR",              "Advanced",   False),
     ("Save%",      "Save %",           "Goalkeeping", False),
     ("Saves",      "Saves (total)",    "Goalkeeping", False),
     ("GA",         "Goals Against",    "Goalkeeping", True),
@@ -911,6 +947,7 @@ _SCOUT_GK = [
     ("Aer%",       "Aerial Win %",     "Duels",       False),
 ]
 _GROUP_COLORS = {
+    "Advanced":     "#6c3fc5",
     "Attacking":    "#1a9988",
     "Passing":      "#d4a91e",
     "Duels":        "#4a7fe8",
@@ -1014,6 +1051,44 @@ def render_player_profile(player_name, full_df):
              <div style="font-size:.62rem;color:#7a9db8;text-transform:uppercase;letter-spacing:1px;">Starts</div></div>
         <div><div style="font-size:1.4rem;font-weight:800;color:#fff;">{mins}</div>
              <div style="font-size:.62rem;color:#7a9db8;text-transform:uppercase;letter-spacing:1px;">Minutes</div></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Advanced metrics strip ───────────────────────────────────────────────
+    gadded   = float(p.get("GAdded",  0) or 0)
+    war      = float(p.get("WAR",     0) or 0)
+    vaep90   = float(p.get("VAEP/90", 0) or 0)
+    epv90    = float(p.get("EPV/90",  0) or 0)
+
+    def _adv_color(v, neutral=0):
+        return "#2e7d32" if v > neutral else ("#cc4444" if v < neutral else "#888")
+
+    st.markdown(f"""
+    <div style="display:flex;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+      <div style="flex:1;min-width:120px;background:#fff;border:1px solid #e4e4e0;border-top:3px solid #6c3fc5;
+           border-radius:6px;padding:.9rem 1.1rem;text-align:center;">
+        <div style="font-size:.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6c3fc5;margin-bottom:.3rem;">Goals Added</div>
+        <div style="font-size:1.5rem;font-weight:900;color:{_adv_color(gadded)};">{gadded:+.2f}</div>
+        <div style="font-size:.65rem;color:#aaa;margin-top:.1rem;">shooting + threat + defence</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#fff;border:1px solid #e4e4e0;border-top:3px solid #6c3fc5;
+           border-radius:6px;padding:.9rem 1.1rem;text-align:center;">
+        <div style="font-size:.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6c3fc5;margin-bottom:.3rem;">WAR</div>
+        <div style="font-size:1.5rem;font-weight:900;color:{_adv_color(war)};">{war:+.2f}</div>
+        <div style="font-size:.65rem;color:#aaa;margin-top:.1rem;">wins above replacement</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#fff;border:1px solid #e4e4e0;border-top:3px solid #6c3fc5;
+           border-radius:6px;padding:.9rem 1.1rem;text-align:center;">
+        <div style="font-size:.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6c3fc5;margin-bottom:.3rem;">VAEP / 90</div>
+        <div style="font-size:1.5rem;font-weight:900;color:{_adv_color(vaep90, 0.3)};">{vaep90:.3f}</div>
+        <div style="font-size:.65rem;color:#aaa;margin-top:.1rem;">value of actions per 90</div>
+      </div>
+      <div style="flex:1;min-width:120px;background:#fff;border:1px solid #e4e4e0;border-top:3px solid #6c3fc5;
+           border-radius:6px;padding:.9rem 1.1rem;text-align:center;">
+        <div style="font-size:.58rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#6c3fc5;margin-bottom:.3rem;">EPV / 90</div>
+        <div style="font-size:1.5rem;font-weight:900;color:{_adv_color(epv90)};">{epv90:.3f}</div>
+        <div style="font-size:.65rem;color:#aaa;margin-top:.1rem;">expected possession value</div>
       </div>
     </div>
     """, unsafe_allow_html=True)
