@@ -962,25 +962,37 @@ with tab_sum:
 with tab_shoot:
     st.markdown('<span class="pill">Shooting Statistics</span>', unsafe_allow_html=True)
 
-    sort_sh = st.selectbox("Sort by", ["xG","Goals","Shots","G-xG","xG/90","Sh/90","BigCh"], key="ssh")
-    df_sh = top_n(df, sort_sh, show_n)
+    # Aggregate by unique player (sum across teams for players who transferred)
+    sum_cols = ["GP","Mins","Goals","Shots","xG","npxG","BigCh"]
+    agg_map   = {c: "sum" for c in sum_cols if c in df.columns}
+    agg_map["Pos"] = "first"
+    agg_map["Team"] = lambda x: "/".join(x.unique())   # e.g. "Arsenal/Chelsea"
 
-    # Goals per shot
-    df_sh = df_sh.copy()
-    df_sh["G/Sh"] = (df_sh["Goals"] / df_sh["Shots"].replace(0,np.nan)).round(3)
-    df_sh["xG/Sh"]= (df_sh["xG"]   / df_sh["Shots"].replace(0,np.nan)).round(3)
+    sh_agg = df.groupby("Player").agg(agg_map).reset_index()
 
-    cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","xG/90","Sh/90","G/90"]
-    cols_sh = [c for c in cols_sh if c in df_sh.columns]
-    df_sh = df_sh[cols_sh]
+    m90 = sh_agg["Mins"].replace(0, np.nan) / 90
+    sh_agg["G/90"]  = (sh_agg["Goals"] / m90).round(2)
+    sh_agg["xG/90"] = (sh_agg["xG"]   / m90).round(2)
+    sh_agg["Sh/90"] = (sh_agg["Shots"] / m90).round(2)
+    sh_agg["G/Sh"]  = (sh_agg["Goals"] / sh_agg["Shots"].replace(0, np.nan)).round(3)
+    sh_agg["xG/Sh"] = (sh_agg["xG"]   / sh_agg["Shots"].replace(0, np.nan)).round(3)
+    sh_agg["G-xG"]  = (sh_agg["Goals"] - sh_agg["xG"]).round(2)
+    sh_agg["BigCh"] = sh_agg["BigCh"].fillna(0).astype(int) if "BigCh" in sh_agg.columns else 0
 
-    render_table(df_sh,
+    sort_sh = st.selectbox("Sort by", ["xG","Goals","Shots","G-xG","xG/90","Sh/90","G/90","G/Sh","xG/Sh","BigCh","Mins"], key="ssh")
+    sh_agg  = sh_agg[sh_agg["Mins"] >= min_mins]
+    sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).head(show_n).reset_index(drop=True)
+
+    cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
+    cols_sh = [c for c in cols_sh if c in sh_sorted.columns]
+
+    render_table(sh_sorted[cols_sh],
         heat_cols=["Goals","xG","Shots","G-xG","BigCh","xG/90","Sh/90","G/90","G/Sh","xG/Sh"],
         pal_map={"Goals":"green","xG":"green","Shots":"blue","G-xG":"blue",
                  "BigCh":"green","xG/90":"green","G/90":"green"},
     )
-    st.markdown('<p class="footnote">npxG = non-penalty xG (approx). G/Sh = goals per shot. xG/Sh = xG per shot quality. BigCh = big chances.</p>', unsafe_allow_html=True)
-    download_buttons(df_sh, "shooting")
+    st.markdown('<p class="footnote">Aggregated season totals per player. npxG = non-penalty xG. G/Sh = goals per shot. xG/Sh = xG per shot. BigCh = big chances.</p>', unsafe_allow_html=True)
+    download_buttons(sh_sorted[cols_sh], "shooting")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
