@@ -778,7 +778,11 @@ def show_table(df_show, heat_cols=None, inv_cols=None, pal_map=None,
     pal_map   = pal_map   or {}
     pct_cols  = pct_cols  or []
 
-    styler = df_show.style.hide(axis="index")
+    fmt = {c: "{:.2f}" for c in df_show.select_dtypes(include="float").columns}
+    for c in pct_cols:
+        if c in fmt:
+            fmt[c] = "{:.2f}"
+    styler = df_show.style.hide(axis="index").format(fmt, na_rep="—")
 
     for col in heat_cols:
         if col not in df_show.columns:
