@@ -548,37 +548,35 @@ def build_player_summary(match_df, xg_df):
     if match_df.empty:
         return pd.DataFrame()
 
-    grp = match_df.groupby(["Player","Team","Pos"]).agg(
+    # Sum counting stats per player (across all teams they played for)
+    sum_cols = ["Mins","Goals","Shots","Saves","GA","Passes","PassCmp","KP","xT",
+                "Tackles","TklWon","Inter","Clears","Dribbles","DribWon",
+                "FoulsCom","FoulsWon","Yellow","Red","Aerials","AerWon"]
+    agg_map = {c: "sum" for c in sum_cols if c in match_df.columns}
+    agg_map["GP"]     = ("Match", "nunique")
+    agg_map["Starts"] = ("Starter", "sum")
+    agg_map["Pos"]    = ("Pos", "first")
+
+    grp = match_df.groupby("Player").agg(
         GP       =("Match","nunique"),
         Starts   =("Starter","sum"),
-        Mins     =("Mins","sum"),
-        Goals    =("Goals","sum"),
-        Shots    =("Shots","sum"),
-        Saves    =("Saves","sum"),
-        GA       =("GA","sum"),
-        Passes   =("Passes","sum"),
-        PassCmp  =("PassCmp","sum"),
-        KP       =("KP","sum"),
-        xT       =("xT","sum"),
-        Tackles  =("Tackles","sum"),
-        TklWon   =("TklWon","sum"),
-        Inter    =("Inter","sum"),
-        Clears   =("Clears","sum"),
-        Dribbles =("Dribbles","sum"),
-        DribWon  =("DribWon","sum"),
-        FoulsCom =("FoulsCom","sum"),
-        FoulsWon =("FoulsWon","sum"),
-        Yellow   =("Yellow","sum"),
-        Red      =("Red","sum"),
-        Aerials  =("Aerials","sum"),
-        AerWon   =("AerWon","sum"),
+        Pos      =("Pos","first"),
+        **{c: (c,"sum") for c in sum_cols if c in match_df.columns},
     ).reset_index()
+
+    # Primary team = club where player logged the most minutes
+    team_by_mins = (
+        match_df.groupby(["Player","Team"])["Mins"].sum()
+        .reset_index().sort_values("Mins", ascending=False)
+        .drop_duplicates("Player")[["Player","Team"]]
+    )
+    grp = grp.merge(team_by_mins, on="Player", how="left")
 
     # xG merge
     if not xg_df.empty:
         xg_grp = xg_df.groupby("PlayerId").agg(
             xG       =("xG","sum"),
-            npxG     =("xG","sum"),   # simplified: no pen separation
+            npxG     =("xG","sum"),
             BigCh    =("isBigChance","sum"),
         ).reset_index().rename(columns={"PlayerId":"Player"})
         grp = grp.merge(xg_grp, on="Player", how="left")
@@ -609,14 +607,7 @@ def build_player_summary(match_df, xg_df):
     grp["Aer%"]    = (grp["AerWon"]  / grp["Aerials"].replace(0,np.nan) * 100).round(1)
     grp["Save%"]   = (grp["Saves"]   / (grp["Saves"]+grp["GA"]).replace(0,np.nan) * 100).round(1)
     grp["G-xG"]    = (grp["Goals"]   - grp["xG"]).round(2)
-    grp["SoT"]     = grp["Goals"]     # approx: shots on target ≈ goals + saves against (not tracked per shooter in JSON)
-    # Better SoT from xgCSV if available
-    if not xg_df.empty:
-        sot = xg_df[xg_df["isGoal"] | xg_df["Bodypart"].notna()].groupby("PlayerId").size().reset_index()
-        # Use shots on target from xg file directly (every row is a shot attempt, goals are SoT)
-        goals_xg = xg_df[xg_df["isGoal"]].groupby("PlayerId").size().reset_index(name="SoT_g")
-        # shots on target = goals + saves (we can't separate easily, so just use shots)
-        grp["SoT"] = np.nan  # leave as nan, compute from available data
+    grp["SoT"]     = np.nan
 
     grp = grp.sort_values(["Pos","Mins"], key=lambda s: s.map(POS_ORDER) if s.name=="Pos" else s, ascending=[True,False])
     return grp.reset_index(drop=True)
@@ -1296,26 +1287,9 @@ with tab_sum:
 with tab_shoot:
     st.markdown('<span class="pill">Shooting Statistics</span>', unsafe_allow_html=True)
 
-    # Aggregate by unique player (sum across teams for players who transferred)
-    sum_cols = ["GP","Mins","Goals","Shots","xG","npxG","BigCh"]
-    agg_map   = {c: "sum" for c in sum_cols if c in df.columns}
-    agg_map["Pos"] = "first"
-    sh_agg = df.groupby("Player").agg(agg_map).reset_index()
-    team_by_mins = (
-        df.groupby(["Player","Team"])["Mins"].sum()
-        .reset_index().sort_values("Mins", ascending=False)
-        .drop_duplicates("Player")[["Player","Team"]]
-    )
-    sh_agg = sh_agg.merge(team_by_mins, on="Player", how="left")
-    m90 = sh_agg["Mins"].replace(0, np.nan) / 90
-    sh_agg["G/90"]  = (sh_agg["Goals"] / m90).round(2)
-    sh_agg["xG/90"] = (sh_agg["xG"]   / m90).round(2)
-    sh_agg["Sh/90"] = (sh_agg["Shots"] / m90).round(2)
-    sh_agg["G/Sh"]  = (sh_agg["Goals"] / sh_agg["Shots"].replace(0, np.nan)).round(3)
-    sh_agg["xG/Sh"] = (sh_agg["xG"]   / sh_agg["Shots"].replace(0, np.nan)).round(3)
-    sh_agg["G-xG"]  = (sh_agg["Goals"] - sh_agg["xG"]).round(2)
-    sh_agg["BigCh"] = sh_agg["BigCh"].fillna(0).astype(int) if "BigCh" in sh_agg.columns else 0
-    sh_agg = sh_agg[sh_agg["Mins"] >= min_mins]
+    sh_agg = df.copy()
+    sh_agg["G/Sh"] = (sh_agg["Goals"] / sh_agg["Shots"].replace(0, np.nan)).round(3)
+    sh_agg["xG/Sh"] = (sh_agg["xG"] / sh_agg["Shots"].replace(0, np.nan)).round(3)
 
     sh_sorted = sh_agg.sort_values(sort_sh, ascending=False).reset_index(drop=True)
     cols_sh = ["Player","Team","Pos","GP","Mins","Goals","Shots","G/Sh","xG","npxG","xG/Sh","G-xG","BigCh","G/90","xG/90","Sh/90"]
