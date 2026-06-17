@@ -281,7 +281,7 @@ SHOT_TYPES = {T_SHOT_MISS, T_SHOT_POST, T_SHOT_SAVED, T_GOAL}
 # JSON PARSER
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner="Parsing match events…")
-def parse_all_matches():
+def parse_all_matches():  # v2 – aerial typeId fixed to 44
     json_files = glob.glob(os.path.join(WSL_DIR, "*.json"))
     if not json_files:
         return pd.DataFrame(), pd.DataFrame()
