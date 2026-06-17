@@ -428,7 +428,7 @@ def parse_all_matches():
                 y1 = qs.get(141, None)
                 if x0 is not None and y0 is not None and x1 is not None and y1 is not None:
                     try:
-                        xt_gain = _xt_value(x1, y1) - _xt_value(x0, y0)
+                        xt_gain = _xt_value(float(x1), float(y1)) - _xt_value(float(x0), float(y0))
                         s["xT"] += max(xt_gain, 0.0)  # only credit positive threat
                     except Exception:
                         pass
@@ -446,7 +446,6 @@ def parse_all_matches():
                     s["goals"] += 1
             elif tid == T_SAVE:
                 s["saves"] += 1
-                s["ga"] += 0  # GA counted from goal events vs GK team
             elif tid == T_FOUL:
                 if outcome == 0:
                     s["fouls_committed"] += 1
@@ -574,11 +573,15 @@ def build_player_summary(match_df, xg_df):
 
     # xG merge
     if not xg_df.empty:
+        np_shots = xg_df[xg_df.get("Type_of_play", pd.Series(dtype=str)).ne("Penalty")] \
+            if "Type_of_play" in xg_df.columns else xg_df
         xg_grp = xg_df.groupby("PlayerId").agg(
-            xG       =("xG","sum"),
-            npxG     =("xG","sum"),
-            BigCh    =("isBigChance","sum"),
-        ).reset_index().rename(columns={"PlayerId":"Player"})
+            xG    =("xG","sum"),
+            BigCh =("isBigChance","sum"),
+        ).reset_index()
+        npxg_grp = np_shots.groupby("PlayerId").agg(npxG=("xG","sum")).reset_index()
+        xg_grp = xg_grp.merge(npxg_grp, on="PlayerId", how="left")
+        xg_grp = xg_grp.rename(columns={"PlayerId":"Player"})
         grp = grp.merge(xg_grp, on="Player", how="left")
     else:
         grp["xG"] = np.nan
@@ -1366,10 +1369,10 @@ with tab_gk:
     if df_gk_base.empty:
         st.info("No goalkeeper data for current filters.")
     else:
-        cs_data = match_df[match_df["Pos"] == "GK"].groupby(["Player","Team"]).apply(
+        cs_data = match_df[match_df["Pos"] == "GK"].groupby("Player").apply(
             lambda g: (g["GA"] == 0).sum()
-        ).reset_index(name="CS") if not match_df.empty else pd.DataFrame(columns=["Player","Team","CS"])
-        df_gk_m = df_gk_base.merge(cs_data, on=["Player","Team"], how="left")
+        ).reset_index(name="CS") if not match_df.empty else pd.DataFrame(columns=["Player","CS"])
+        df_gk_m = df_gk_base.merge(cs_data, on="Player", how="left")
         df_gk_m["CS"] = df_gk_m["CS"].fillna(0).astype(int)
         df_gk_m["GA/90"] = (df_gk_m["GA"] / (df_gk_m["Mins"] / 90).replace(0, np.nan)).round(2)
 
