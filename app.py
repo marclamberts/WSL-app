@@ -1091,36 +1091,48 @@ def render_player_profile(player_name, full_df):
 
     with c_pizza:
         st.markdown('<span class="pill">Radar Chart</span>', unsafe_allow_html=True)
-        labels = [r["stat"]  for r in rows]
-        pcts   = [r["pct"]   for r in rows]
-        colors = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
-        n      = len(labels)
-        step   = 360 / n
-        thetas = [i * step + step / 2 for i in range(n)]
+        labels = [r["stat"] for r in rows]
+        pcts   = [r["pct"]  for r in rows]
+        # close the polygon
+        labels_closed = labels + [labels[0]]
+        pcts_closed   = pcts   + [pcts[0]]
 
         fig = go.Figure()
-        fig.add_trace(go.Barpolar(
-            r=[99]*n, theta=thetas, width=[step*.98]*n,
-            marker_color=["#f0f0ec"]*n, marker_line_width=0,
-            hoverinfo="skip", showlegend=False,
+        # faint outer ring at 99
+        fig.add_trace(go.Scatterpolar(
+            r=[99] * (len(labels) + 1),
+            theta=labels_closed,
+            fill="toself",
+            fillcolor="#f0f0ec",
+            line=dict(color="#e0e0dc", width=1),
+            hoverinfo="skip",
+            showlegend=False,
         ))
-        fig.add_trace(go.Barpolar(
-            r=pcts, theta=thetas, width=[step*.98]*n,
-            marker_color=colors, marker_line_color="white", marker_line_width=1.5,
-            opacity=0.88, showlegend=False,
-            customdata=[[r["stat"], r["val"], r["pct"]] for r in rows],
-            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:.2f} · %{customdata[2]:.0f}th pct<extra></extra>",
+        # player values
+        hover = [f"{r['stat']}: {r['val']:.2f} · {int(round(r['pct']))}th pct" for r in rows]
+        fig.add_trace(go.Scatterpolar(
+            r=pcts_closed,
+            theta=labels_closed,
+            fill="toself",
+            fillcolor="rgba(26,153,136,0.25)",
+            line=dict(color="#1a9988", width=2),
+            text=hover + [hover[0]],
+            hoverinfo="text",
+            showlegend=False,
         ))
         fig.update_layout(
             polar=dict(
-                radialaxis=dict(visible=False, range=[0, 99]),
-                angularaxis=dict(tickvals=thetas, ticktext=labels,
-                                 direction="clockwise", rotation=90,
-                                 tickfont=dict(size=9, color=NAVY)),
+                radialaxis=dict(visible=True, range=[0, 99],
+                                tickvals=[25, 50, 75],
+                                tickfont=dict(size=7, color="#bbb"),
+                                gridcolor="#e8e8e4", linecolor="#e8e8e4"),
+                angularaxis=dict(tickfont=dict(size=9, color=NAVY),
+                                 linecolor="#e0e0dc", gridcolor="#e8e8e4"),
                 bgcolor="white",
             ),
-            showlegend=False, height=400,
-            margin=dict(l=80, r=80, t=20, b=20),
+            showlegend=False,
+            height=420,
+            margin=dict(l=70, r=70, t=30, b=30),
             paper_bgcolor="white",
         )
         st.plotly_chart(fig, use_container_width=True)
