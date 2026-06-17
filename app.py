@@ -41,6 +41,10 @@ st.markdown(f"""
   [data-testid="stStatusWidget"],
   .viewerBadge_container__1QSob {{ display: none !important; }}
 
+  /* ── Lock sidebar open — hide collapse/expand controls ── */
+  [data-testid="stSidebarCollapseButton"],
+  [data-testid="collapsedControl"] {{ display: none !important; }}
+
   /* ── Main canvas ── */
   .stApp {{ background: {CREAM}; }}
   .block-container {{
