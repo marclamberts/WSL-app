@@ -1096,30 +1096,18 @@ def render_player_profile(player_name, full_df):
         colors = [_GROUP_COLORS.get(r["group"], "#888") for r in rows]
 
         fig = go.Figure()
-        # grey background ring (full extent = 99)
-        fig.add_trace(go.Barpolar(
-            r=[99] * len(labels),
-            theta=labels,
-            marker_color="#f0f0ec",
-            marker_line_color="#e0e0dc",
-            marker_line_width=1,
-            hoverinfo="skip",
-            showlegend=False,
-        ))
-        # player slices
         fig.add_trace(go.Barpolar(
             r=pcts,
             theta=labels,
             marker_color=colors,
             marker_line_color="white",
-            marker_line_width=1.5,
-            opacity=0.9,
+            marker_line_width=2,
+            opacity=1.0,
             showlegend=False,
             customdata=[[r["stat"], r["val"], int(round(r["pct"]))] for r in rows],
             hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:.2f} · %{customdata[2]}th pct<extra></extra>",
         ))
         fig.update_layout(
-            barmode="overlay",
             polar=dict(
                 radialaxis=dict(visible=False, range=[0, 99]),
                 angularaxis=dict(
@@ -1127,7 +1115,7 @@ def render_player_profile(player_name, full_df):
                     direction="clockwise",
                     rotation=90,
                 ),
-                bgcolor="white",
+                bgcolor="#e8e8e4",
             ),
             showlegend=False,
             height=440,
