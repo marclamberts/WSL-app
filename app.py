@@ -1021,11 +1021,11 @@ with tab_gk:
 with tab_misc:
     st.markdown('<span class="pill">Discipline & Duels</span>', unsafe_allow_html=True)
 
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.markdown('<span class="pill">Discipline</span>', unsafe_allow_html=True)
+    st.markdown('<span class="pill">Discipline</span>', unsafe_allow_html=True)
+    c_ctrl, c_tbl = st.columns([1, 4])
+    with c_ctrl:
         sort_disc = st.selectbox("Sort by", ["Yellow","Red","FoulsCom","FoulsWon"], key="sdisc")
+    with c_tbl:
         df_disc = top_n(df, sort_disc, show_n)
         cols_disc = ["Player","Team","Pos","GP","Mins","FoulsCom","FoulsWon","Yellow","Red"]
         cols_disc = [c for c in cols_disc if c in df_disc.columns]
@@ -1036,9 +1036,11 @@ with tab_misc:
         )
         download_buttons(df_disc[cols_disc], "discipline")
 
-    with c2:
-        st.markdown('<span class="pill">Dribbles & Aerials</span>', unsafe_allow_html=True)
+    st.markdown('<span class="pill">Dribbles & Aerials</span>', unsafe_allow_html=True)
+    c_ctrl2, c_tbl2 = st.columns([1, 4])
+    with c_ctrl2:
         sort_duel = st.selectbox("Sort by", ["Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"], key="sduel")
+    with c_tbl2:
         df_duel = top_n(df, sort_duel, show_n)
         cols_duel = ["Player","Team","Pos","GP","Mins","Dribbles","DribWon","Drib%","Aerials","AerWon","Aer%"]
         cols_duel = [c for c in cols_duel if c in df_duel.columns]
@@ -1066,86 +1068,94 @@ with tab_teams:
 
         # ── Attacking ─────────────────────────────────────────────────────
         st.markdown('<span class="pill">⚽ Attacking</span>', unsafe_allow_html=True)
-        sort_ta = st.selectbox("Sort by", ["Goals","xG","xGD","G-xG","Shots","KP","Goals/G","xG/G","Shots/G","KP/G"], key="sta")
-        ta_atk  = ta.sort_values(sort_ta, ascending=False).reset_index(drop=True)
-        ta_atk.insert(0, "Rank", ta_atk.index + 1)
-        cols_atk = ["Rank","Team","GP","Goals","Shots","xG","xGA","xGD","G-xG","KP",
-                    "Goals/G","Shots/G","xG/G","xGA/G","KP/G"]
-        cols_atk = [c for c in cols_atk if c in ta_atk.columns]
-        show_table(ta_atk[cols_atk],
-            heat_cols=["Goals","Shots","xG","xGD","G-xG","KP","Goals/G","xG/G","Shots/G","KP/G"],
-            inv_cols=["xGA","xGA/G"],
-            pal_map={"Goals":"green","Shots":"blue","xG":"green","xGD":"blue","G-xG":"green",
-                     "KP":"blue","Goals/G":"green","xG/G":"green","xGA":"red","xGA/G":"red"},
-            left_cols=["Team"],
-        )
-        download_buttons(ta_atk[cols_atk], "teams_attacking")
+        c_ctrl, c_tbl = st.columns([1, 4])
+        with c_ctrl:
+            sort_ta = st.selectbox("Sort by", ["Goals","xG","xGD","G-xG","Shots","KP","Goals/G","xG/G","Shots/G","KP/G"], key="sta")
+        with c_tbl:
+            ta_atk = ta.sort_values(sort_ta, ascending=False).reset_index(drop=True)
+            ta_atk.insert(0, "Rank", ta_atk.index + 1)
+            cols_atk = ["Rank","Team","GP","Goals","Shots","xG","xGA","xGD","G-xG","KP","Goals/G","Shots/G","xG/G","xGA/G","KP/G"]
+            cols_atk = [c for c in cols_atk if c in ta_atk.columns]
+            show_table(ta_atk[cols_atk],
+                heat_cols=["Goals","Shots","xG","xGD","G-xG","KP","Goals/G","xG/G","Shots/G","KP/G"],
+                inv_cols=["xGA","xGA/G"],
+                pal_map={"Goals":"green","Shots":"blue","xG":"green","xGD":"blue","G-xG":"green",
+                         "KP":"blue","Goals/G":"green","xG/G":"green","xGA":"red","xGA/G":"red"},
+                left_cols=["Team"],
+            )
+            download_buttons(ta_atk[cols_atk], "teams_attacking")
 
         # ── Passing ───────────────────────────────────────────────────────
         st.markdown('<span class="pill">🎯 Passing</span>', unsafe_allow_html=True)
-        sort_tp = st.selectbox("Sort by", ["Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"], key="stp")
-        ta_pass = ta.sort_values(sort_tp, ascending=False).reset_index(drop=True)
-        ta_pass.insert(0, "Rank", ta_pass.index + 1)
-        cols_pass = ["Rank","Team","GP","Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"]
-        cols_pass = [c for c in cols_pass if c in ta_pass.columns]
-        show_table(ta_pass[cols_pass],
-            heat_cols=["Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"],
-            pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green",
-                     "Passes/G":"blue","PassCmp/G":"blue","KP/G":"green"},
-            left_cols=["Team"],
-            pct_cols=["Pass%"],
-        )
-        download_buttons(ta_pass[cols_pass], "teams_passing")
+        c_ctrl, c_tbl = st.columns([1, 4])
+        with c_ctrl:
+            sort_tp = st.selectbox("Sort by", ["Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"], key="stp")
+        with c_tbl:
+            ta_pass = ta.sort_values(sort_tp, ascending=False).reset_index(drop=True)
+            ta_pass.insert(0, "Rank", ta_pass.index + 1)
+            cols_pass = ["Rank","Team","GP","Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"]
+            cols_pass = [c for c in cols_pass if c in ta_pass.columns]
+            show_table(ta_pass[cols_pass],
+                heat_cols=["Passes","PassCmp","Pass%","KP","Passes/G","PassCmp/G","KP/G"],
+                pal_map={"Passes":"blue","PassCmp":"blue","Pass%":"green","KP":"green",
+                         "Passes/G":"blue","PassCmp/G":"blue","KP/G":"green"},
+                left_cols=["Team"],
+                pct_cols=["Pass%"],
+            )
+            download_buttons(ta_pass[cols_pass], "teams_passing")
 
         # ── Defensive ─────────────────────────────────────────────────────
         st.markdown('<span class="pill">🛡 Defensive</span>', unsafe_allow_html=True)
-        sort_td = st.selectbox("Sort by", ["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%",
-                                            "GA","Saves","Save%","xGA","Tackles/G","Inter/G","Clears/G"], key="std")
-        asc_td  = sort_td in ("GA","xGA","GA/G","xGA/G")
-        ta_def  = ta.sort_values(sort_td, ascending=asc_td).reset_index(drop=True)
-        ta_def.insert(0, "Rank", ta_def.index + 1)
-        cols_def = ["Rank","Team","GP",
-                    "GA","Saves","Save%","GA/G","Saves/G",
-                    "Tackles","TklWon","Tkl%","Tackles/G","TklWon/G",
-                    "Inter","Clears","Inter/G","Clears/G",
-                    "Aerials","AerWon","Aer%","Aerials/G","AerWon/G",
-                    "xGA","xGA/G"]
-        cols_def = [c for c in cols_def if c in ta_def.columns]
-        show_table(ta_def[cols_def],
-            heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aer%","Save%","Saves",
-                       "Tackles/G","TklWon/G","Inter/G","Clears/G","AerWon","Aerials/G","AerWon/G","Saves/G"],
-            inv_cols=["GA","xGA","GA/G","xGA/G"],
-            pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
-                     "Aer%":"green","Save%":"green","GA":"red","xGA":"red","Saves":"blue",
-                     "Tackles/G":"blue","TklWon/G":"green","Inter/G":"blue","Clears/G":"blue",
-                     "GA/G":"red","xGA/G":"red","Saves/G":"blue","AerWon":"green","AerWon/G":"green"},
-            left_cols=["Team"],
-            pct_cols=["Tkl%","Aer%","Save%"],
-        )
-        download_buttons(ta_def[cols_def], "teams_defensive")
+        c_ctrl, c_tbl = st.columns([1, 4])
+        with c_ctrl:
+            sort_td = st.selectbox("Sort by", ["Tackles","TklWon","Tkl%","Inter","Clears","Aerials","AerWon","Aer%",
+                                                "GA","Saves","Save%","xGA","Tackles/G","Inter/G","Clears/G"], key="std")
+        with c_tbl:
+            asc_td = sort_td in ("GA","xGA","GA/G","xGA/G")
+            ta_def = ta.sort_values(sort_td, ascending=asc_td).reset_index(drop=True)
+            ta_def.insert(0, "Rank", ta_def.index + 1)
+            cols_def = ["Rank","Team","GP","GA","Saves","Save%","GA/G","Saves/G",
+                        "Tackles","TklWon","Tkl%","Tackles/G","TklWon/G",
+                        "Inter","Clears","Inter/G","Clears/G",
+                        "Aerials","AerWon","Aer%","Aerials/G","AerWon/G","xGA","xGA/G"]
+            cols_def = [c for c in cols_def if c in ta_def.columns]
+            show_table(ta_def[cols_def],
+                heat_cols=["Tackles","TklWon","Tkl%","Inter","Clears","Aer%","Save%","Saves",
+                           "Tackles/G","TklWon/G","Inter/G","Clears/G","AerWon","Aerials/G","AerWon/G","Saves/G"],
+                inv_cols=["GA","xGA","GA/G","xGA/G"],
+                pal_map={"Tackles":"blue","TklWon":"green","Tkl%":"green","Inter":"blue","Clears":"blue",
+                         "Aer%":"green","Save%":"green","GA":"red","xGA":"red","Saves":"blue",
+                         "Tackles/G":"blue","TklWon/G":"green","Inter/G":"blue","Clears/G":"blue",
+                         "GA/G":"red","xGA/G":"red","Saves/G":"blue","AerWon":"green","AerWon/G":"green"},
+                left_cols=["Team"],
+                pct_cols=["Tkl%","Aer%","Save%"],
+            )
+            download_buttons(ta_def[cols_def], "teams_defensive")
 
         # ── Discipline & Duels ────────────────────────────────────────────
         st.markdown('<span class="pill">🃏 Discipline & Duels</span>', unsafe_allow_html=True)
-        sort_tdisc = st.selectbox("Sort by", ["Yellow","Red","FoulsCom","FoulsWon","Dribbles","DribWon","Drib%",
-                                               "FoulsCom/G","FoulsWon/G","Yellow/G","Dribbles/G","DribWon/G"], key="stdisc")
-        asc_tdisc = sort_tdisc in ("Yellow","Red","FoulsCom","FoulsCom/G","Yellow/G")
-        ta_disc = ta.sort_values(sort_tdisc, ascending=False).reset_index(drop=True)
-        ta_disc.insert(0, "Rank", ta_disc.index + 1)
-        cols_disc = ["Rank","Team","GP",
-                     "FoulsCom","FoulsWon","Yellow","Red","FoulsCom/G","FoulsWon/G","Yellow/G","Red/G",
-                     "Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"]
-        cols_disc = [c for c in cols_disc if c in ta_disc.columns]
-        show_table(ta_disc[cols_disc],
-            heat_cols=["FoulsWon","FoulsWon/G","Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"],
-            inv_cols=["FoulsCom","Yellow","Red","FoulsCom/G","Yellow/G","Red/G"],
-            pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green",
-                     "Dribbles":"blue","DribWon":"green","Drib%":"green",
-                     "FoulsCom/G":"red","Yellow/G":"red","Red/G":"red",
-                     "FoulsWon/G":"green","Dribbles/G":"blue","DribWon/G":"green"},
-            left_cols=["Team"],
-            pct_cols=["Drib%"],
-        )
-        download_buttons(ta_disc[cols_disc], "teams_discipline")
+        c_ctrl, c_tbl = st.columns([1, 4])
+        with c_ctrl:
+            sort_tdisc = st.selectbox("Sort by", ["Yellow","Red","FoulsCom","FoulsWon","Dribbles","DribWon","Drib%",
+                                                   "FoulsCom/G","FoulsWon/G","Yellow/G","Dribbles/G","DribWon/G"], key="stdisc")
+        with c_tbl:
+            ta_disc = ta.sort_values(sort_tdisc, ascending=False).reset_index(drop=True)
+            ta_disc.insert(0, "Rank", ta_disc.index + 1)
+            cols_disc = ["Rank","Team","GP","FoulsCom","FoulsWon","Yellow","Red",
+                         "FoulsCom/G","FoulsWon/G","Yellow/G","Red/G",
+                         "Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"]
+            cols_disc = [c for c in cols_disc if c in ta_disc.columns]
+            show_table(ta_disc[cols_disc],
+                heat_cols=["FoulsWon","FoulsWon/G","Dribbles","DribWon","Drib%","Dribbles/G","DribWon/G"],
+                inv_cols=["FoulsCom","Yellow","Red","FoulsCom/G","Yellow/G","Red/G"],
+                pal_map={"FoulsCom":"red","Yellow":"red","Red":"red","FoulsWon":"green",
+                         "Dribbles":"blue","DribWon":"green","Drib%":"green",
+                         "FoulsCom/G":"red","Yellow/G":"red","Red/G":"red",
+                         "FoulsWon/G":"green","Dribbles/G":"blue","DribWon/G":"green"},
+                left_cols=["Team"],
+                pct_cols=["Drib%"],
+            )
+            download_buttons(ta_disc[cols_disc], "teams_discipline")
 
         # ── All Stats Export ──────────────────────────────────────────────
         st.markdown('<span class="pill">📥 Full Season Export</span>', unsafe_allow_html=True)
